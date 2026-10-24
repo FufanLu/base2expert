@@ -1,0 +1,49 @@
+{
+  "model": "/tmp/b2e-models/Qwen3.5-4B-Base-chat",
+  "thinking": "false",
+  "temperature": 0.0,
+  "sets": {
+    "finqa_test": {
+      "n": 1147,
+      "runs": [
+        {
+          "accuracy": 0.7044,
+          "boxed_rate": 0.9852,
+          "mean_tokens": 396.8,
+          "truncated": 28,
+          "seconds": 58.0
+        },
+        {
+          "accuracy": 0.7088,
+          "boxed_rate": 0.9904,
+          "mean_tokens": 384.7,
+          "truncated": 19,
+          "seconds": 50.5
+        }
+      ],
+      "accuracy_mean": 0.7066,
+      "accuracy_spread": 0.0044
+    },
+    "tatqa_dev": {
+      "n": 738,
+      "runs": [
+        {
+          "accuracy": 0.7683,
+          "boxed_rate": 0.9919,
+          "mean_tokens": 322.3,
+          "truncated": 11,
+          "seconds": 33.1
+        },
+        {
+          "accuracy": 0.7724,
+          "boxed_rate": 0.9932,
+          "mean_tokens": 304.2,
+          "truncated": 9,
+          "seconds": 29.7
+        }
+      ],
+      "accuracy_mean": 0.7703,
+      "accuracy_spread": 0.0041
+    }
+  }
+}
