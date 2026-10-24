@@ -66,3 +66,16 @@ def test_synth_keeps_the_shortest_verified_finished_answer():
     assert [r["enable_thinking"] for r in rows] == [True, False]
     assert rows[0]["messages"][-1]["content"] == "<think>\nshort\n</think>\n\n\\boxed{5}"
     assert rows[1]["messages"][-1]["content"] == "\\boxed{5}"
+
+
+def test_a_data_dir_contributes_its_top_level_parquet_only(tmp_path):
+    import pandas as pd
+
+    from b2e.train.cpt_dataset import expand_files
+
+    pd.DataFrame({"input_ids": [[1, 2]]}).to_parquet(tmp_path / "fin_zh.parquet")
+    (tmp_path / "manifest.json").write_text("{}")
+    (tmp_path / "heldout").mkdir()
+    pd.DataFrame({"text": ["held out"]}).to_parquet(tmp_path / "heldout" / "fin_zh.parquet")
+    assert expand_files(str(tmp_path)) == [str(tmp_path / "fin_zh.parquet")]
+    assert expand_files([str(tmp_path / "fin_zh.parquet")]) == [str(tmp_path / "fin_zh.parquet")]

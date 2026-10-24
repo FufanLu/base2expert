@@ -30,13 +30,31 @@ def sample_fields(ids: list[int], mrope_rows: bool) -> dict[str, list]:
     }
 
 
+def expand_files(spec) -> list[str]:
+    """Parquet files from a path or list of paths; a directory contributes its own *.parquet only.
+
+    Handing a directory to pd.read_parquet makes pyarrow read every file under
+    it, recursively: in data/cpt/m0 that is manifest.json and the held-out
+    documents in heldout/ (docs/failures.md F#30)."""
+    import glob
+    import os
+
+    parts = [spec] if isinstance(spec, str) else list(spec)
+    out: list[str] = []
+    for part in parts:
+        for p in str(part).replace(",", " ").split():
+            out += sorted(glob.glob(os.path.join(p, "*.parquet"))) if os.path.isdir(p) else [p]
+    if not out:
+        raise ValueError(f"no parquet files in {spec!r}")
+    return out
+
+
 class PretrainChunkDataset:
     def __init__(self, parquet_files, tokenizer, config, processor=None, max_samples: int = -1):
         import numpy as np
         import pandas as pd
 
-        # verl passes a str or an OmegaConf ListConfig
-        files = [parquet_files] if isinstance(parquet_files, str) else list(parquet_files)
+        files = expand_files(parquet_files)  # verl passes a str or an OmegaConf ListConfig
         frames = [pd.read_parquet(f, columns=["input_ids"]) for f in files]
         self.ids = pd.concat(frames, ignore_index=True)["input_ids"].tolist()
         if max_samples and 0 < max_samples < len(self.ids):
