@@ -136,7 +136,7 @@ def cmmlu(hf: Path) -> Iterator[tuple[str, str]]:
         for name in zf.namelist():
             if not name.endswith(".csv"):
                 continue
-            split = "test" if "/test/" in name else "dev"
+            split = "test" if "test/" in name else "dev"  # zip paths look like "test/agronomy.csv"
             reader = csv.DictReader(io.StringIO(zf.read(name).decode("utf-8")))
             for row in reader:
                 yield split, _join(row.get("Question"), row.get("A"), row.get("B"), row.get("C"), row.get("D"))

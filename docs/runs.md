@@ -72,3 +72,5 @@ was read. Nothing here is estimated.
 | 11347234 | Rebuild the tools env as r2 with spaCy | short | submitted | — | — |
 | 11347236 | datatrove probe rerun on tools r2: does spaCy `xx` segment Chinese? | short | queued after 11347234 | — | — |
 | 11347256 | Collect eval-split text (questions, options, contexts) of 12 eval sets for decontamination (`b2e.data.eval_texts`) | short | submitted | — | — |
+| 11346892 | (result) nanochat tokenizer on ClimbMix | short / d0139 | completed | ~2 min of training | 32,768-token vocabulary, 32,503 BPE merges over 2 B characters in 102 s on 32 CPU cores (rustbpe); eval bundle unpacked into `pretrain/base/eval_bundle` |
+| 11347256 | (result) Eval-split text for decontamination | short / c0612 | completed | — | 402 MB JSONL over 12 sets: CAIL2018 302,577 (four test/valid splits), C-Eval 13,948, CMExam 13,622, CMMLU 11,917 (labelled all `dev` by a path check of mine, fixed: the zip paths have no leading slash; every row was included either way), MMLU-Pro 12,102, MedMCQA 10,333, ConvFinQA 3,866, FinQA 2,030, GSM8K 1,319, MedQA 1,273, TAT-QA 551, IFEval 541 |
