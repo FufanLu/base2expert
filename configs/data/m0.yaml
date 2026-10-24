@@ -1,5 +1,6 @@
 # M0 mid-training mix (shares of the total token budget).
-# Domain text comes from the cleaned IndustryCorpus2 shards (b2e.data.clean_pipeline);
+# Domain text and general replay both come from b2e.data.clean_pipeline output
+# (length/quality, PII, eval-item decontamination, MinHash);
 # general replay keeps the base model's general ability; long chain-of-thought
 # (OpenThoughts3) is the anneal data in the reasoning format used later.
 # Paths are relative to $B2E_ROOT/data and expanded by the job script.
@@ -10,6 +11,6 @@ sources:
   - {name: law_en, share: 0.0917, kind: text, files: ["clean/law_en/*.parquet"]}
   - {name: med_zh, share: 0.0916, kind: text, files: ["clean/med_zh/*.parquet"]}
   - {name: med_en, share: 0.0916, kind: text, files: ["clean/med_en/*.parquet"]}
-  - {name: general_en, share: 0.15, kind: text, files: ["hf/HuggingFaceFW/fineweb-edu/sample/10BT/*.parquet"]}
-  - {name: general_zh, share: 0.15, kind: text, files: ["hf/opencsg/Fineweb-Edu-Chinese-V2.1/2_3/*.parquet"]}
+  - {name: general_en, share: 0.15, kind: text, files: ["clean/general_en/*.parquet"]}
+  - {name: general_zh, share: 0.15, kind: text, files: ["clean/general_zh/*.parquet"]}
   - {name: long_cot, share: 0.15, kind: chat, files: ["hf/open-thoughts/OpenThoughts3-1.2M/data/*.parquet"]}
