@@ -128,3 +128,4 @@ was read. Nothing here is estimated.
 | 11349022, 11349024 | Baseline evals with thinking on (max 8,192 new tokens, 1 run each) for Qwen3.5-4B-Base-chat and Qwen3.5-4B, FinQA test + TAT-QA dev | gpu | submitted | — | — |
 | 11348190 | (result) Cross-node Ray probe on a hetjob | gpu / d4053 + d4055 | failed | 3m01s | Ray token authentication rejected the driver (F#22) |
 | 11349055 | Cross-node Ray probe rerun with a shared auth token | gpu (2 × H200, hetjob) | submitted | — | — |
+| 11348716 | (result) Cleaning general_zh (2 Chinese FineWeb-Edu shards) | short | completed | 12m03s | 130,251 docs in; dropped too short 4,186 (+1 too long); decontamination 29 (CMMLU 22, C-Eval 6, CAIL 1); MinHash 866; kept 125,169 (346 MB). PII replacements: mobile 1,338, e-mail 997, IP 351, ID number 32, card 25. Web text carries far more PII than the domain corpus |
