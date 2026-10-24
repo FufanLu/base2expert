@@ -5,7 +5,10 @@ Steps, in order:
   2. length filter, and a minimum quality_score when the source provides one
      (BAAI IndustryCorpus2 does)
   3. PII scrub (b2e.data.pii: e-mail, IP, phone, checksum-valid ID and card numbers)
-  4. 13-gram decontamination against every eval split (b2e.data.decontam)
+  4. decontamination against every eval split (b2e.data.decontam): a
+     document is dropped when it shares a run of 13 English words or 20 CJK
+     characters with an eval item; n-grams common to 3+ eval items are not
+     indexed (boilerplate, see docs/runs.md 11347805)
   5. MinHash near-duplicate removal, datatrove's four stages:
      signatures -> buckets -> clusters -> filter
   6. write parquet
@@ -72,15 +75,19 @@ class ScrubPII(BaseFormatter):
 class Decontaminate(BaseFilter):
     name = "🧪 13-gram decontamination"
 
-    def __init__(self, index_path: str, n: int = 13, exclusion_writer=None):
+    def __init__(self, index_path: str, n: int = 13, min_units_en: int = 13, min_units_cjk: int = 20,
+                 exclusion_writer=None):
         super().__init__(exclusion_writer)
         self.index_path, self.n = index_path, n
+        self.min_units_en, self.min_units_cjk = min_units_en, min_units_cjk
         self._index: FrozenNgramIndex | None = None
 
     def filter(self, doc: Document) -> bool | tuple[bool, str]:
         if self._index is None:  # loaded in the worker process, shared via mmap
             self._index = FrozenNgramIndex(self.index_path, self.n)
-        return True if self._index.hits(doc.text) == 0 else (False, "eval_overlap")
+        if self._index.contaminated_by_runs(doc.text, self.min_units_en, self.min_units_cjk):
+            return False, "eval_overlap"
+        return True
 
 
 class UnitWordTokenizer:
@@ -98,14 +105,14 @@ class MixedLangMinhashSignature(MinhashDedupSignature):
         self.word_tokenizer = UnitWordTokenizer()
 
 
-def build_index(eval_texts: str, out: str) -> None:
+def build_index(eval_texts: str, out: str, max_df: int = 3) -> None:
     def texts():
         with open(eval_texts) as f:
             for line in f:
                 yield json.loads(line)["text"]
 
-    n = FrozenNgramIndex.build(texts(), out)
-    print(json.dumps({"index": out, "ngrams": n, "bytes": os.path.getsize(out)}))
+    n = FrozenNgramIndex.build(texts(), out, max_df=max_df)
+    print(json.dumps({"index": out, "ngrams": n, "max_df": max_df, "bytes": os.path.getsize(out)}))
 
 
 def clean(args) -> None:
@@ -170,6 +177,7 @@ def main() -> None:
     a = sub.add_parser("index")
     a.add_argument("--eval-texts", required=True)
     a.add_argument("--out", required=True)
+    a.add_argument("--max-df", type=int, default=3)
     c = sub.add_parser("clean")
     c.add_argument("--input", required=True)
     c.add_argument("--glob", default="*.parquet")
@@ -185,7 +193,7 @@ def main() -> None:
     c.add_argument("--limit", type=int, default=-1)
     args = ap.parse_args()
     if args.cmd == "index":
-        build_index(args.eval_texts, args.out)
+        build_index(args.eval_texts, args.out, args.max_df)
     else:
         clean(args)
 

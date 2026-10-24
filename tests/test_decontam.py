@@ -52,3 +52,32 @@ def test_frozen_index_matches_set_index(tmp_path):
     assert n == len(ref)
     for doc in [Q + " extra words here", "经审理查明：被告人以非法占有为目的，虚构投资项目，骗取十一名被害人钱款。", "unrelated text " * 20]:
         assert frozen.hits(doc) == ref.hits(doc)
+
+
+SLOGAN = "全面建设社会主义现代化国家"
+
+
+def test_common_phrases_are_not_indexed(tmp_path):
+    # the slogan appears in three eval items; the unique item text does not
+    evals = [f"{SLOGAN}，下列说法正确的是{i}号" for i in "甲乙丙"] + ["被告人以非法占有为目的，虚构投资项目，骗取十一名被害人共计四十八万元。"]
+    path = str(tmp_path / "idx.npy")
+    FrozenNgramIndex.build(evals, path, max_df=3)
+    idx = FrozenNgramIndex(path)
+    assert not idx.contaminated_by_runs(f"新闻：我们要{SLOGAN}，推动高质量发展。")
+    assert idx.contaminated_by_runs("经审理查明：被告人以非法占有为目的，虚构投资项目，骗取十一名被害人钱款。")
+
+
+def test_cjk_runs_need_twenty_characters(tmp_path):
+    item = "甲公司于二零二三年向乙银行借款五百万元用于购买生产设备并约定分期偿还本息"
+    path = str(tmp_path / "idx.npy")
+    FrozenNgramIndex.build([item], path)
+    idx = FrozenNgramIndex(path)
+    assert not idx.contaminated_by_runs("报道称甲公司于二零二三年向乙银行借款之后")       # 14 shared chars
+    assert idx.contaminated_by_runs("报道称甲公司于二零二三年向乙银行借款五百万元用于购买设备")  # 22 shared chars
+
+
+def test_english_runs_keep_thirteen_words(tmp_path):
+    path = str(tmp_path / "idx.npy")
+    FrozenNgramIndex.build([Q], path)
+    idx = FrozenNgramIndex(path)
+    assert idx.contaminated_by_runs("Context " + Q)

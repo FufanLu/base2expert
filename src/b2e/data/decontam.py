@@ -74,11 +74,50 @@ class FrozenNgramIndex:
         self.keys = np.load(path, mmap_mode="r")
 
     @staticmethod
-    def build(texts: Iterable[str], path: str, n: int = 13) -> int:
-        parts = [ngram_hashes(t, n) for t in texts]
-        keys = np.unique(np.concatenate(parts)) if parts else np.zeros(0, dtype=np.uint64)
+    def build(texts: Iterable[str], path: str, n: int = 13, max_df: int = 0) -> int:
+        """max_df > 0 drops n-grams found in max_df or more distinct eval items.
+
+        Those are shared phrasing, not test content: in Chinese a 13-character
+        window is a set phrase, and slogans or legal boilerplate recur across
+        C-Eval / CMMLU politics questions and CAIL rulings. A training document
+        that contains them has copied no test item (docs/runs.md, 11347805)."""
+        parts = [ngram_hashes(t, n) for t in texts]  # unique within each item
+        if not parts:
+            keys = np.zeros(0, dtype=np.uint64)
+        elif max_df:
+            allk, counts = np.unique(np.concatenate(parts), return_counts=True)
+            keys = allk[counts < max_df]
+        else:
+            keys = np.unique(np.concatenate(parts))
         np.save(path, keys)
         return len(keys)
+
+    def match_runs(self, text: str) -> list[tuple[int, float]]:
+        """Maximal runs of consecutive matching n-grams, as (length in units,
+        fraction of the run's units that are CJK characters)."""
+        u = units(text)
+        if len(u) < self.n or len(self.keys) == 0:
+            return []
+        h = np.fromiter((int.from_bytes(_key(u[i:i + self.n]), "little") for i in range(len(u) - self.n + 1)),
+                        dtype=np.uint64)
+        pos = np.searchsorted(self.keys, h)
+        pos[pos == len(self.keys)] = len(self.keys) - 1
+        hit = np.asarray(self.keys[pos]) == h
+        out, start = [], None
+        for i, flag in enumerate(list(hit) + [False]):
+            if flag and start is None:
+                start = i
+            elif not flag and start is not None:
+                span = u[start:i - 1 + self.n]
+                cjk = sum(1 for x in span if len(x) == 1 and "\u3400" <= x <= "\ufaff") / len(span)
+                out.append((len(span), cjk))
+                start = None
+        return out
+
+    def contaminated_by_runs(self, text: str, min_units_en: int = 13, min_units_cjk: int = 20) -> bool:
+        """A run counts as copied test content when it is long enough for its script:
+        13 English words (GPT-3's rule) or 20 consecutive CJK characters."""
+        return any(length >= (min_units_cjk if cjk > 0.5 else min_units_en) for length, cjk in self.match_runs(text))
 
     def hits(self, text: str) -> int:
         q = ngram_hashes(text, self.n)
