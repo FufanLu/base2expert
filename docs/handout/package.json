@@ -1,0 +1,17 @@
+{
+  "name": "handout",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "markdown-it": "^14.3.3",
+    "markdown-it-anchor": "^9.2.1"
+  }
+}
