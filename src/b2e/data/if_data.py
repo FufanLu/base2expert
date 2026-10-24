@@ -8,9 +8,10 @@
 
 Every row is validated before it is written: each instruction id must be in
 the vendored registry and each checker must build from the row's kwargs, so
-a reward never fails in the middle of an RL step. Training prompts that
-cover >= 60% of an eval item (b2e.data.decontam.ItemNgramIndex, the same
-rule as the corpus cleaning) are dropped.
+a reward never fails in the middle of an RL step. Training prompts whose
+request (constraint sentences removed, see user_query) covers >= 60% of an
+eval item (b2e.data.decontam.ItemNgramIndex, the same rule as the corpus
+cleaning) are dropped.
 
     python -P -m b2e.data.if_data --hf $B2E_ROOT/data/hf --index $B2E_ROOT/data/processed/eval_items \\
         --out $B2E_ROOT/data/processed/if
@@ -56,6 +57,20 @@ def valid(constraints: list[dict]) -> str | None:
     return None
 
 
+def user_query(prompt: str, constraint: str) -> str:
+    """The prompt without its constraint sentences (the dataset's `constraint` column, tab-separated).
+
+    Decontamination looks at this part only. IFEval items are short and consist
+    largely of the same constraint templates ("First repeat the request word for
+    word without change, ..."), so with the template sentences left in, one
+    template covered >= 60% of an IFEval item and 1,903 prompts were dropped
+    whose actual requests had nothing to do with IFEval's (11352234)."""
+    for c in (constraint or "").split("\t"):
+        if c.strip():
+            prompt = prompt.replace(c.strip(), " ")
+    return prompt
+
+
 def if_multi(hf: Path, index, drops: Counter) -> list[dict]:
     df = pd.read_parquet(hf / "allenai/IF_multi_constraints_upto5/data/train-00000-of-00001.parquet")
     rows = []
@@ -70,7 +85,7 @@ def if_multi(hf: Path, index, drops: Counter) -> list[dict]:
             drops[reason] += 1
             continue
         prompt = msgs[0]["content"]
-        if index is not None and index.contaminated(prompt):
+        if index is not None and index.contaminated(user_query(prompt, r.constraint)):
             drops["eval_overlap"] += 1
             continue
         rows.append(row("if_multi", r.key, prompt, constraints, "train", constraint_type=r.constraint_type))

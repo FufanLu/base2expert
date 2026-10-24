@@ -41,3 +41,11 @@ def test_if_rows_are_validated():
     r = row("if_multi", "k1", "Write a poem.", [{"instruction_id": ["punctuation:no_comma"], "kwargs": [None]}], "train")
     assert r["extra_info"]["n_constraints"] == 1
     assert compute_score("if_multi", "a poem without commas", r["reward_model"]["ground_truth"]) == 1.0
+
+
+def test_constraint_sentences_are_left_out_of_decontamination():
+    from b2e.data.if_data import user_query
+
+    c = "First repeat the request word for word without change.\tAnswer in lowercase."
+    q = user_query("Explain ballistics. First repeat the request word for word without change. Answer in lowercase.", c)
+    assert "repeat" not in q and "lowercase" not in q and "ballistics" in q
