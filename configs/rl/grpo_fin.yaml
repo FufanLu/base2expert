@@ -1,0 +1,14 @@
+# GRPO on finance (FinQA + TAT-QA arithmetic/count) from S-fin: the P6
+# baseline that PPO, DAPO and GSPO are compared against at equal samples.
+#   cluster/submit_rl.sh grpo_fin s_fin finance 3
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+trainer:
+  experiment_name: grpo_fin
+  total_training_steps: 150

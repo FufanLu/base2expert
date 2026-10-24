@@ -1,0 +1,87 @@
+# Single-turn RL on verifiable domain problems, one GPU, shared by every
+# algorithm in P6 so that only the algorithm differs between runs. A run file
+# composes this one and overrides what it changes (see grpo_fin.yaml).
+# cluster/rl.sbatch exports B2E_RL_DATA (train/val parquet), B2E_MODEL,
+# B2E_CKPT_DIR and B2E_CODE.
+defaults:
+  - ppo_trainer
+  - _self_
+
+algorithm:
+  adv_estimator: grpo
+  norm_adv_by_std_in_grpo: true
+  use_kl_in_reward: false
+
+data:
+  train_files: ${oc.env:B2E_RL_TRAIN}
+  val_files: ${oc.env:B2E_RL_VAL}
+  train_batch_size: 128        # prompts per step (x rollout.n samples)
+  max_prompt_length: 4096      # FinQA/TAT-QA excerpts with tables
+  max_response_length: 4096    # thinking + answer
+  filter_overlong_prompts: true
+  truncation: error
+  shuffle: true
+  dataloader_num_workers: 4
+  apply_chat_template_kwargs:
+    enable_thinking: true
+
+actor_rollout_ref:
+  model:
+    path: ${oc.env:B2E_MODEL}
+    use_remove_padding: true
+    enable_gradient_checkpointing: true
+  actor:
+    strategy: fsdp2
+    optim:
+      lr: 1.0e-6
+    ppo_mini_batch_size: 128
+    use_dynamic_bsz: true
+    ppo_max_token_len_per_gpu: 32768
+    grad_clip: 1.0
+    use_kl_loss: false
+    entropy_coeff: 0
+    loss_agg_mode: token-mean
+    clip_ratio_low: 0.2
+    clip_ratio_high: 0.2
+    use_torch_compile: false
+    entropy_from_logits_with_chunking: true
+  ref:
+    strategy: fsdp2
+    log_prob_use_dynamic_bsz: true
+    log_prob_max_token_len_per_gpu: 32768
+  rollout:
+    name: vllm
+    n: 8
+    temperature: 1.0
+    top_p: 1.0
+    tensor_model_parallel_size: 1
+    gpu_memory_utilization: 0.4
+    max_num_seqs: 512
+    enable_prefix_caching: true
+    calculate_log_probs: true   # train/inference mismatch metrics (P6)
+    log_prob_use_dynamic_bsz: true
+    log_prob_max_token_len_per_gpu: 32768
+    val_kwargs:
+      temperature: 0
+      do_sample: false
+      n: 1
+
+reward:
+  num_workers: 8
+  custom_reward_function:
+    path: ${oc.env:B2E_CODE}/src/b2e/reward/score.py
+    name: compute_score
+
+trainer:
+  project_name: base2expert
+  default_local_dir: ${oc.env:B2E_CKPT_DIR}
+  logger: [console, wandb]
+  n_gpus_per_node: 1
+  nnodes: 1
+  val_before_train: true
+  test_freq: 10
+  save_freq: 10
+  max_actor_ckpt_to_keep: 2
+  resume_mode: auto
+  log_val_generations: 8
+  rollout_data_dir: ${oc.env:B2E_CKPT_DIR}/rollouts
