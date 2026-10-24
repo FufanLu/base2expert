@@ -1,4 +1,4 @@
-from b2e.data.decontam import NgramIndex, units
+from b2e.data.decontam import FrozenNgramIndex, NgramIndex, units
 
 Q = "What was the percentage change in net revenue from 2018 to 2019 for the consumer segment?"
 
@@ -39,3 +39,16 @@ def test_text_shorter_than_n():
     idx.add("short text")
     assert len(idx) == 0
     assert idx.hits("short text") == 0
+
+
+def test_frozen_index_matches_set_index(tmp_path):
+    evals = [Q, "被告人以非法占有为目的，虚构投资项目，骗取十一名被害人共计四十八万元。"]
+    path = str(tmp_path / "idx.npy")
+    n = FrozenNgramIndex.build(evals, path)
+    frozen = FrozenNgramIndex(path)
+    ref = NgramIndex(13)
+    for e in evals:
+        ref.add(e)
+    assert n == len(ref)
+    for doc in [Q + " extra words here", "经审理查明：被告人以非法占有为目的，虚构投资项目，骗取十一名被害人钱款。", "unrelated text " * 20]:
+        assert frozen.hits(doc) == ref.hits(doc)
