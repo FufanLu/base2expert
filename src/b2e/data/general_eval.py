@@ -32,7 +32,9 @@ LETTERS = "ABCDEFGHIJ"
 
 def mmlu_pro(hf: Path, per_category: int, seed: int) -> list[dict]:
     df = pd.read_parquet(next((hf / "TIGER-Lab/MMLU-Pro/data").glob("test-*.parquet")))
-    df = df.groupby("category", group_keys=False).apply(lambda g: g.sample(n=min(per_category, len(g)), random_state=seed))
+    # pick indices per group: since pandas 3, groupby.apply no longer passes the grouping column on
+    keep = [i for _, g in df.groupby("category") for i in g.sample(n=min(per_category, len(g)), random_state=seed).index]
+    df = df.loc[keep]
     rows = []
     for r in df.itertuples(index=False):
         opts = {LETTERS[i]: o for i, o in enumerate(r.options)}
