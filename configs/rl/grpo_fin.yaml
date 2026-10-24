@@ -9,6 +9,9 @@ defaults:
   - base
   - _self_
 
+data:
+  val_max_samples: 512   # of FinQA dev + TAT-QA dev; the full sets are scored by b2e.eval.run_eval
+
 trainer:
   experiment_name: grpo_fin
   total_training_steps: 150
