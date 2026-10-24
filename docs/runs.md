@@ -53,6 +53,7 @@ was read. Nothing here is estimated.
 | 11346555 | Heterogeneous-job probe: two components of one H200 each in the `gpu` partition | gpu | queued | — | Pending with reason `Resources`, not a QoS limit: the QoS (1 GPU per job) accepts a hetjob whose components ask for one GPU each. Confirmed once it starts |
 | 11346592 | nanochat's ClimbMix downloader, 8 shards, into `pretrain/base/base_data_climbmix` | short | failed | 34 s | `No module named 'nanochat'` (F#14) |
 | 11346659 | ClimbMix download rerun with nanochat on PYTHONPATH | short | submitted | — | — |
-| 11346598 | Download two `2_3/*` shards of opencsg/Fineweb-Edu-Chinese-V2.1 (Chinese text for the bilingual side track) | short | running | — | — |
+| 11346598 | Download two `2_3/*` shards of opencsg/Fineweb-Edu-Chinese-V2.1 (Chinese text for the bilingual side track) | short | completed | 2m53s | `2_3/000000.parquet`, `2_3/000001.parquet`; per-job manifest `data/hf/manifests/11346598.tsv` |
 | 11346629 | `tools/merge_identity.py` rerun with the symlinked second input (F#13) | short | completed | 1m03s | Linear 0.5/0.5 and TIES both give 473 tensors with max abs diff 0 against the original; both drop the 15 `mtp.*` tensors. mergekit is usable for the P8 baselines |
 | 11346656 | On-policy distillation smoke (`cluster/smoke_opd.sbatch`): student Qwen3.5-0.8B-Base-chat on GPU 0, teacher Qwen3.5-4B as a vLLM server on GPU 1, k3 reverse-KL estimate in policy-gradient form, no task reward, GSM8K, 10 steps | gpu-short (2 × H200) | queued | — | — |
+| 11346699 | Teacher throughput: Qwen3.6-35B-A3B in vLLM 0.26 offline mode, 512 GSM8K prompts, thinking on, max 4096 new tokens (`tools/teacher_throughput.py`) | gpu (H200) | submitted | — | — |
