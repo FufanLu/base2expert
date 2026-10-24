@@ -18,6 +18,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff", "mypy"]
+# instruction-following verifiers (src/b2e/reward/ifevalg, vendored)
+reward = ["nltk", "langdetect", "immutabledict", "absl-py"]
 
 [build-system]
 requires = ["setuptools>=61"]
@@ -34,6 +36,7 @@ markers = ["gpu: needs a GPU and the cluster env (skipped by default)"]
 [tool.ruff]
 line-length = 120
 target-version = "py310"
+extend-exclude = ["src/b2e/reward/ifevalg"]  # vendored, kept as upstream wrote it
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "SIM"]
@@ -43,3 +46,4 @@ ignore = ["E501"]
 python_version = "3.12"
 ignore_missing_imports = true
 files = ["src/b2e"]
+exclude = ["src/b2e/reward/ifevalg/"]

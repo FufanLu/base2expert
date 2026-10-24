@@ -142,6 +142,15 @@ activate_env() {
   export NCCL_IB_DISABLE=${NCCL_IB_DISABLE:-1}
   # The repo's package (src/b2e) is importable without installing.
   export PYTHONPATH="$CODE/src${PYTHONPATH:+:$PYTHONPATH}"
+  # Pure-Python additions for the instruction-following verifiers
+  # (langdetect, immutabledict) and nltk's sentence-splitter data, built by
+  # cluster/setup_addons.sbatch. Appended, so an env's own packages win.
+  if [ -d "$ROOT/envs/addons-r1" ]; then
+    export PYTHONPATH="$PYTHONPATH:$ROOT/envs/addons-r1"
+  fi
+  if [ -d "$ROOT/envs/nltk_data" ]; then
+    export NLTK_DATA=$ROOT/envs/nltk_data
+  fi
 }
 
 # stage_model NAME copies $MODELS/NAME to node-local disk unless this node

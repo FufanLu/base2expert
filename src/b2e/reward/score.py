@@ -2,7 +2,8 @@
 
 verl calls compute_score(data_source, solution_str, ground_truth, extra_info)
 for every rollout. Scores are 1.0 (verified correct) or 0.0, except the
-CAIL prison term, which is graded (b2e.reward.legal.term_score). A missing
+CAIL prison term, which is graded (b2e.reward.legal.term_score), and
+instruction following, the fraction of constraints met (b2e.reward.ifcheck). A missing
 \\boxed{} answer scores 0, the same as a wrong one, so the model is never
 paid for the format alone.
 """
@@ -12,6 +13,7 @@ from __future__ import annotations
 import json
 
 from b2e.reward.choice import choice_match
+from b2e.reward.ifcheck import if_score
 from b2e.reward.legal import norm_articles, norm_charges, term_score
 from b2e.reward.numeric import extract_boxed, numeric_match
 
@@ -29,6 +31,8 @@ def check_number(answer: str, gt: dict) -> bool:
 
 def compute_score(data_source: str, solution_str: str, ground_truth, extra_info=None) -> float:
     gt = json.loads(ground_truth) if isinstance(ground_truth, str) else ground_truth
+    if gt["kind"] == "ifeval":  # free-form answers with constraints, no \boxed{}
+        return if_score(solution_str, gt)
     answer = extract_boxed(solution_str)
     if answer is None:
         return 0.0
