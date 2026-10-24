@@ -64,6 +64,10 @@ export NO_PROXY="127.0.0.1,localhost,::1${NO_PROXY:+,$NO_PROXY}" no_proxy="127.0
 # W&B cannot reach its server from a compute node: runs log offline into the
 # checkpoint directory and are synced from the login node.
 export WANDB_MODE=${WANDB_MODE:-offline}
+# The mid-training smoke (11347590) had 90 GB allocated but 137 GB reserved
+# on a 141 GB H200: allocator fragmentation. Expandable segments let the
+# caching allocator grow blocks instead of reserving new ones.
+export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}
 
 log() { echo "[$(date +%H:%M:%S)] $*" >&2; }
 
