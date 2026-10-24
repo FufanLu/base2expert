@@ -35,3 +35,9 @@ def test_choice():
     assert choice_match("C", "C")
     assert not choice_match("C", "D")
     assert not choice_match("Cross-linking", "D")
+
+
+def test_ten_option_letters():
+    # MMLU-Pro options run A-J
+    assert choice_match("J", "J")
+    assert letters("I. none of the above") == {"I"}

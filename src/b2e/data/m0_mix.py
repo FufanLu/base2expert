@@ -9,6 +9,10 @@ total token budget, its files, and its kind:
 Every source is cut at its budget (chunks of at most max_len tokens, ending
 documents with the end-of-text token) and written to <out>/<name>.parquet,
 with a manifest of the tokens each source actually contributed.
+The first --heldout-docs documents of each text source are not trained on:
+they go to <out>/heldout/<name>.parquet as plain text, where b2e.eval.bpb
+measures bits per byte before and after mid-training (domain text should
+get cheaper, general text should not get dearer).
 
     python -P -m b2e.data.m0_mix --recipe configs/data/m0.yaml --total-tokens 5e8 \\
         --data-root $B2E_ROOT/data --tokenizer <model dir> --out $B2E_ROOT/data/cpt/m0
@@ -19,8 +23,9 @@ from __future__ import annotations
 import argparse
 import ast
 import glob
+import itertools
 import json
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from pathlib import Path
 
 import yaml
@@ -37,6 +42,12 @@ def read_column(files: list[str], column: str) -> Iterator:
         pf = pq.ParquetFile(f)
         for i in range(pf.num_row_groups):
             yield from pf.read_row_group(i, columns=[column]).column(column).to_pylist()
+
+
+def split_heldout(docs: Iterable[str], n: int) -> tuple[list[str], Iterator[str]]:
+    """The first n documents, and an iterator over the rest."""
+    it = iter(docs)
+    return list(itertools.islice(it, n)), it
 
 
 def render_chat(conv, tok) -> str:
@@ -56,6 +67,7 @@ def main() -> None:
     ap.add_argument("--decontam-index", default="",
                     help="ItemNgramIndex prefix; documents covering >= 60%% of an eval item are skipped. "
                          "Needed for sources that bypass clean_pipeline (the chat-format long-CoT data)")
+    ap.add_argument("--heldout-docs", type=int, default=500, help="per text source, kept out of training for bpb")
     args = ap.parse_args()
 
     import pyarrow as pa
@@ -85,6 +97,10 @@ def main() -> None:
             texts: Iterator[str] = (render_chat(c, tok) for c in read_column(files, "conversations"))
         else:
             texts = (t for t in read_column(files, "text") if t)
+            if args.heldout_docs:
+                held, texts = split_heldout(texts, args.heldout_docs)
+                (out / "heldout").mkdir(exist_ok=True)
+                pq.write_table(pa.table({"text": held}), out / "heldout" / f"{src['name']}.parquet")
         skipped = {"n": 0}
         if index is not None and src.get("decontam", src["kind"] == "chat"):
             def keep(it: Iterator[str], skipped=skipped) -> Iterator[str]:
@@ -105,7 +121,8 @@ def main() -> None:
                        out / f"{src['name']}.parquet", row_group_size=1024)
         manifest["sources"][src["name"]] = {"share": src["share"], "budget": int(budget), "tokens": n_tok,
                                             "chunks": len(chunks), "docs": docs, "files": files,
-                                            "exhausted": n_tok < budget, "decontam_skipped": skipped["n"]}
+                                            "exhausted": n_tok < budget, "decontam_skipped": skipped["n"],
+                                            "heldout_docs": args.heldout_docs if src["kind"] != "chat" else 0}
         print(src["name"], manifest["sources"][src["name"]]["tokens"], "tokens", "(short of budget)" if n_tok < budget else "", flush=True)
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
 

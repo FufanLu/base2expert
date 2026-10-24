@@ -32,3 +32,18 @@ def test_split_thinking():
 
     assert split_thinking("step 1...\n</think>\n\nso \\boxed{3}") == ("step 1...", "so \\boxed{3}")
     assert split_thinking("no think block \\boxed{3}") == ("", "no think block \\boxed{3}")
+
+
+def test_heldout_documents_are_not_in_the_training_stream():
+    from b2e.data.m0_mix import split_heldout
+
+    held, rest = split_heldout(iter(["a", "b", "c", "d"]), 2)
+    assert held == ["a", "b"]
+    assert list(rest) == ["c", "d"]
+
+
+def test_bpb_counts_bytes_after_the_first_token():
+    from b2e.eval.bpb import scored_bytes
+
+    # "ab中" as three tokens: the first ("a") is never predicted
+    assert scored_bytes("ab中", [(0, 1), (1, 2), (2, 3)]) == 1 + 3
