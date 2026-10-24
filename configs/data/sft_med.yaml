@@ -1,0 +1,17 @@
+# S-med SFT mix (b2e.data.sft_mix). Paths relative to $B2E_ROOT/data.
+# Domain: every medicine prompt the teacher solved (thinking + non-thinking
+# pair each). Around it, general chat and instruction following so the
+# expert keeps answering ordinary requests, system prompts and format
+# constraints: thinking and non-thinking in roughly equal numbers.
+# S-law / S-med swap the first source; S-mix takes all three.
+val_fraction: 0.01
+sources:
+  - {name: med, kind: synth, files: ["sft/med.parquet"], prompts: all}
+  - {name: if_synth, kind: synth, files: ["sft/if.parquet"], prompts: 3000}
+  - {name: magpie_nothink, kind: smoltalk, files: ["hf/HuggingFaceTB/smoltalk2/SFT/smoltalk_smollm3_smol_magpie_ultra_no_think-*.parquet"], rows: 3000}
+  - {name: systemchats_nothink, kind: smoltalk, files: ["hf/HuggingFaceTB/smoltalk2/SFT/smoltalk_smollm3_systemchats_30k_no_think-*.parquet"], rows: 1500}
+  - {name: systemchats_think, kind: smoltalk, files: ["hf/HuggingFaceTB/smoltalk2/SFT/smoltalk_systemchats_Qwen3_32B_think-*.parquet"], rows: 1500}
+  - {name: everyday_think, kind: smoltalk, files: ["hf/HuggingFaceTB/smoltalk2/SFT/smoltalk_everyday_convs_reasoning_Qwen3_32B_think-*.parquet"], rows: 1000}
+  - {name: multilingual_think, kind: smoltalk, files: ["hf/HuggingFaceTB/smoltalk2/SFT/smoltalk_multilingual8_Qwen3_32B_think-*.parquet"], rows: 1500}
+  - {name: personas_if_nothink, kind: smoltalk, files: ["hf/HuggingFaceTB/smoltalk2/SFT/tulu_3_sft_personas_instruction_following_no_think-*.parquet"], rows: 1500}
+  - {name: if_think, kind: smoltalk, files: ["hf/HuggingFaceTB/smoltalk2/SFT/multi_turn_reasoning_if_think-*.parquet"], rows: 1500}
