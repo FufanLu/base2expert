@@ -9,7 +9,7 @@ test:
 	$(PY) -m pytest -q
 
 lint:
-	$(PY) -m ruff check src tests $(wildcard tools)
+	$(PY) -m ruff check src tests $(wildcard tools pretrain)
 
 typecheck:
 	$(PY) -m mypy
