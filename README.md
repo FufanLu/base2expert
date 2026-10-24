@@ -17,6 +17,15 @@ It has seen no instruction tuning, so every stage of post-training is done here:
    on-policy distillation (MOPD). Two baselines are compared against it: RL
    on all three domains at once, and TIES / DARE weight merging.
 
+Two recursive self-improvement loops are added on top:
+
+- **Model level**: the finance expert writes new problems, each with a
+  program that computes the answer. It answers them, keeps what the verifier
+  accepts, and is trained again, for three rounds.
+- **Research level**: following Karpathy's AutoResearch, a local Qwen3.6
+  agent edits the small model's training script, trains for 5 minutes, and
+  keeps or discards each change by validation loss.
+
 A side track pre-trains a 0.56B bilingual model from scratch with
 [nanochat](https://github.com/karpathy/nanochat). It covers the tokenizer, a
 small scaling-law fit, data-mix ablations, and chained 8-hour jobs.

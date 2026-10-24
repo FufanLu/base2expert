@@ -55,6 +55,19 @@ Short smoke jobs, mostly on `gpu-short`.
   context 2K→8K); SFT.
 - Comparison with Qwen3.5-0.8B-Base in bits per byte (tokenizer-independent).
 
+## P2.5 Side track: agentic auto-research (recursive self-improvement, research level)
+
+- Follows Karpathy's AutoResearch protocol (2026-03): data prep and
+  evaluation are fixed, the agent edits only the training script, every trial
+  trains for a fixed 5 minutes, and val_bpb decides keep or discard.
+- The researcher is Qwen3.6-35B-A3B served by vLLM on the same H200 as the
+  small training run (compute nodes are offline). Our own `program.md`
+  instructs it.
+- About 15 trials per 2-hour gpu-short job, 3-4 jobs.
+- Baselines: the default config, and random search with the same number of
+  trials (LR, warmdown, data mix).
+- The best change found is carried to the d20 run.
+
 ## P3 M0 mid-training
 
 - From Qwen3.5-4B-Base on ~0.5-1B tokens, set after measuring throughput:
@@ -107,6 +120,25 @@ Short smoke jobs, mostly on `gpu-short`.
 - R-law and R-med with the recipe chosen in P6. R-fin is the best P6 run.
 - Medicine adds RaR-Medicine rubric rewards.
 - Accuracy-vs-thinking-budget curves.
+
+## P7.5 Model self-improvement loop (recursive self-improvement, model level)
+
+From R-fin, each round:
+
+1. The model writes new finance problems, each with a Python program that
+   computes the answer (FinQA's own "program → answer" form), executed in a
+   sandbox to give the gold answer.
+2. Dedup and decontaminate; keep problems the model solves 10-90% of the time.
+3. Sample 8 answers per problem and check them against the program's result.
+4. GRPO on the new problems gives the next round's model.
+
+- Three rounds.
+- Open-ended prompts use the model as its own judge, compared against the
+  external judge (Qwen3.6), to measure whether self-judging drifts.
+- Measured: per-round scores on fixed eval sets, diversity of the generated
+  problems, saturation, and whether problems drift towards easy ones
+  (generator gaming).
+- Baseline: the same compute spent on RL over the fixed dataset.
 
 ## P8 Fusion
 
