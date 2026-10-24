@@ -8,6 +8,7 @@ Mid-training and every later stage are checked on the same general sets, so
             answers)
   cmmlu     Chinese, 4 options, stratified: --per-subject items from each
             subject of the test split
+  gsm8k     English grade-school math, the whole test split, numeric answer
 Prompts are zero-shot and ask for the option letter in \\boxed{}, the same
 format as the medical sets in b2e.data.law_med, so b2e.eval.run_eval scores
 them with the choice verifier.
@@ -20,6 +21,7 @@ from __future__ import annotations
 import argparse
 import csv
 import io
+import json
 import zipfile
 from pathlib import Path
 
@@ -76,6 +78,31 @@ def cmmlu(hf: Path, per_subject: int, seed: int) -> list[dict]:
     return rows
 
 
+GSM8K_HEAD = "Solve the problem. Reason step by step, then give only the final number in \\boxed{}."
+
+
+def gsm8k(processed: Path) -> list[dict]:
+    """GSM8K test in our format. The copy in processed/gsm8k was made for the P0
+    smoke by verl's example preprocessing: its prompt asks for the answer after
+    "####" and its ground truth is a bare number string, which b2e's scorer does
+    not take (docs/failures.md F#29). The question text is kept, the
+    instruction replaced, and the gold wrapped as a number."""
+    df = pd.read_parquet(processed / "gsm8k" / "test.parquet")
+    rows = []
+    for r in df.itertuples(index=False):
+        q = list(r.prompt)[0]["content"]
+        q = q.split("Let's think step by step")[0].strip()
+        gold = float(str(r.reward_model["ground_truth"]).replace(",", ""))
+        rows.append({
+            "data_source": "gsm8k",
+            "prompt": [{"role": "user", "content": f"{GSM8K_HEAD}\n\n{q}"}],
+            "ability": "general",
+            "reward_model": {"style": "rule", "ground_truth": json.dumps({"kind": "number", "value": gold})},
+            "extra_info": {"split": "test", "id": str(r.extra_info["index"]), "category": "math"},
+        })
+    return rows
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--hf", type=Path, required=True)
@@ -89,6 +116,7 @@ def main() -> None:
         "mmlu_pro_test": mmlu_pro(args.hf, args.per_category, args.seed),
         "ceval_val": ceval(args.hf),
         "cmmlu_test": cmmlu(args.hf, args.per_subject, args.seed),
+        "gsm8k_test": gsm8k(args.out.parent),
     }
     for name, rows in sets.items():
         pd.DataFrame(rows).to_parquet(args.out / f"{name}.parquet", index=False)

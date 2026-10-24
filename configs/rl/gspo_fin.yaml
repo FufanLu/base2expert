@@ -1,0 +1,29 @@
+# GSPO on finance, from S-fin: the importance ratio and its clipping are taken
+# per sequence (the geometric mean of the token ratios) instead of per token,
+# which the GSPO paper argues matches the sequence-level reward and is steadier
+# for MoE models. Because a sequence ratio moves far less than single-token
+# ratios, its clip range is tiny: 3e-4 / 4e-4 as in the paper.
+# Loss aggregation per verl's recommendation for gspo (core_algos.py).
+#   cluster/submit_rl.sh gspo_fin s_fin finance 3
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    policy_loss:
+      loss_mode: gspo
+    loss_agg_mode: seq-mean-token-mean
+    clip_ratio_low: 0.0003
+    clip_ratio_high: 0.0004
+
+data:
+  val_max_samples: 512
+
+trainer:
+  experiment_name: gspo_fin
+  total_training_steps: 150

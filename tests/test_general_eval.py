@@ -14,3 +14,24 @@ def test_mmlu_pro_stratified_sample_keeps_category(tmp_path):
     assert sorted(r["extra_info"]["category"] for r in out) == ["law", "law", "math", "math"]
     assert "J. j" in out[0]["prompt"][0]["content"]
     assert compute_score("mmlu_pro", "\\boxed{J}", out[0]["reward_model"]["ground_truth"]) == 1.0
+
+
+def test_gsm8k_rewritten_to_boxed_number(tmp_path):
+    import json
+
+    import pytest
+
+    from b2e.data.general_eval import gsm8k
+
+    d = tmp_path / "gsm8k"
+    d.mkdir()
+    pd.DataFrame([{"data_source": "openai/gsm8k", "ability": "math",
+                   "prompt": [{"role": "user", "content": 'Janet has 3 eggs. Let\'s think step by step and output the final answer after "####".'}],
+                   "reward_model": {"style": "rule", "ground_truth": "1,018"}, "extra_info": {"split": "test", "index": 0}}]
+                 ).to_parquet(d / "test.parquet")
+    (row,) = gsm8k(tmp_path)
+    assert "####" not in row["prompt"][0]["content"] and "\\boxed{}" in row["prompt"][0]["content"]
+    assert json.loads(row["reward_model"]["ground_truth"]) == {"kind": "number", "value": 1018.0}
+    assert compute_score("gsm8k", "so \\boxed{1018}", row["reward_model"]["ground_truth"]) == 1.0
+    with pytest.raises(ValueError, match="openai/gsm8k"):
+        compute_score("openai/gsm8k", "\\boxed{18}", "18")  # the old format fails loudly

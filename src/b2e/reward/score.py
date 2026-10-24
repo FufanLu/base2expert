@@ -31,6 +31,9 @@ def check_number(answer: str, gt: dict) -> bool:
 
 def compute_score(data_source: str, solution_str: str, ground_truth, extra_info=None) -> float:
     gt = json.loads(ground_truth) if isinstance(ground_truth, str) else ground_truth
+    if not isinstance(gt, dict) or "kind" not in gt:
+        raise ValueError(f"{data_source}: ground truth {ground_truth!r} is not a b2e ground-truth object "
+                         "(JSON with a 'kind'); build the set with a b2e.data module")
     if gt["kind"] == "ifeval":  # free-form answers with constraints, no \boxed{}
         return if_score(solution_str, gt)
     answer = extract_boxed(solution_str)

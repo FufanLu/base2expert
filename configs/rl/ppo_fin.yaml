@@ -1,0 +1,50 @@
+# PPO with a critic and GAE on finance, from S-fin: the P6 arm that learns a
+# per-token value instead of comparing samples within a group.
+# Equal samples per step with GRPO (128 prompts x 8): 1,024 prompts x 1.
+# The critic starts from the policy's own weights (its LM head is replaced by
+# a value head) and gets critic_warmup steps alone first: in the P0 smoke
+# (11343462) the critic's explained variance stayed negative with no warm-up,
+# i.e. its values were worse than predicting the mean return.
+#   cluster/submit_rl.sh ppo_fin s_fin finance 3
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+algorithm:
+  adv_estimator: gae
+  gamma: 1.0       # one reward at the end of the answer; no discounting within it
+  lam: 0.95
+
+data:
+  train_batch_size: 1024
+  val_max_samples: 512
+
+actor_rollout_ref:
+  actor:
+    ppo_mini_batch_size: 1024
+  rollout:
+    n: 1
+
+critic:
+  model:
+    path: ${oc.env:B2E_MODEL}
+    use_remove_padding: true
+    enable_gradient_checkpointing: true
+  optim:
+    lr: 1.0e-5
+    lr_warmup_steps_ratio: 0.0
+  use_dynamic_bsz: true
+  ppo_max_token_len_per_gpu: 32768
+  cliprange_value: 0.5
+  fsdp:
+    param_offload: true      # actor, ref, critic and the vLLM engine share one H200
+    optimizer_offload: true
+
+trainer:
+  experiment_name: ppo_fin
+  total_training_steps: 150
+  critic_warmup: 10

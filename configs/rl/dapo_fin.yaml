@@ -1,0 +1,42 @@
+# DAPO's changes to GRPO on finance, from S-fin:
+#   clip-higher        clip_ratio_high 0.28 (low stays 0.2): low-probability
+#                      tokens can grow further before clipping, against entropy collapse
+#   token-level loss   loss_agg_mode token-mean (already the base setting)
+#   overlong shaping   the dapo reward manager subtracts a linear penalty over
+#                      the last overlong_buffer tokens before max_response_length,
+#                      instead of scoring a cut-off answer like a wrong one
+# Dynamic sampling (drop groups whose samples all score the same) is only in
+# verl 0.9.1's V1 trainer (trainer.use_v1=True, algorithm.filter_groups);
+# whether that path runs here is a P6 smoke. Until then the offline version
+# applies: the RL prompt pool keeps prompts with a pass rate in [0.1, 0.9].
+#   cluster/submit_rl.sh dapo_fin s_fin finance 3
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    clip_ratio_low: 0.2
+    clip_ratio_high: 0.28
+
+reward:
+  reward_manager:
+    name: dapo
+  reward_kwargs:
+    max_resp_len: ${data.max_response_length}
+    overlong_buffer_cfg:
+      enable: true
+      len: 1024
+      penalty_factor: 1.0
+      log: false
+
+data:
+  val_max_samples: 512
+
+trainer:
+  experiment_name: dapo_fin
+  total_training_steps: 150
