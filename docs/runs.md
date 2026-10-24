@@ -94,3 +94,4 @@ was read. Nothing here is estimated.
 | local | Decontamination redesign (commit after 11347805) | — | done | — | (1) the index skips n-grams that occur in 3 or more distinct eval items (shared phrasing, not test content); (2) a document is contaminated when a run of consecutive matching units reaches 13 English words or 20 CJK characters. Unit tests cover both |
 | 11347925 | Rebuild the index with `max_df=3` | short | submitted | — | — |
 | 11347929 | Cleaning test rerun with the new index and run thresholds (after 11347925) | short | queued | — | — |
+| 11347937 | `tools/pii_inspect.py`: context of every PII match in 2,500 finance zh docs | short | completed | — | ip 19 raw matches, all outline numbers; card 9 raw matches, all table cells glued by the free-spacing pattern (1 passed Luhn and was replaced); mobile 3, all real contact numbers. Patterns fixed (F#18) |

@@ -32,3 +32,20 @@ def test_finance_numbers_survive():
 def test_mobile_with_country_code():
     out, _ = scrub("call +86 13912345678 now")
     assert out == "call <PHONE> now"
+
+
+def test_outline_numbers_are_not_ips():
+    t = "2.4.6 中国 2.4.6.1 现有的流通方式 2.4.6.2 规则体系的乱局"
+    out, c = scrub(t)
+    assert out == t and c["ip"] == 0
+
+
+def test_table_cells_are_not_card_numbers():
+    t = "退休年龄 计发月数 40 233 41 230 42 226 43 223 44 220 45 216 46 212"
+    out, c = scrub(t)
+    assert out == t and c["card"] == 0
+
+
+def test_grouped_card_with_dashes():
+    out, c = scrub("card 4111-1111-1111-1111 end")
+    assert out == "card <CARD_NUMBER> end" and c["card"] == 1
