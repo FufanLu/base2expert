@@ -25,3 +25,10 @@ def test_first_token_is_never_a_target():
 def test_mrope_position_rows():
     f = sample_fields([5, 6], mrope_rows=True)
     assert f["position_ids"] == [[0, 1]] * 4
+
+
+def test_split_thinking():
+    from b2e.data.synth import split_thinking
+
+    assert split_thinking("step 1...\n</think>\n\nso \\boxed{3}") == ("step 1...", "so \\boxed{3}")
+    assert split_thinking("no think block \\boxed{3}") == ("", "no think block \\boxed{3}")
