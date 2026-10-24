@@ -47,3 +47,22 @@ def test_bpb_counts_bytes_after_the_first_token():
 
     # "ab中" as three tokens: the first ("a") is never predicted
     assert scored_bytes("ab中", [(0, 1), (1, 2), (2, 3)]) == 1 + 3
+
+
+def test_synth_keeps_the_shortest_verified_finished_answer():
+    import json
+    from types import SimpleNamespace
+
+    from b2e.data.synth import score_prompt
+
+    row = SimpleNamespace(data_source="finqa", prompt=[{"role": "user", "content": "q"}], extra_info={"id": "x"},
+                          reward_model={"ground_truth": json.dumps({"kind": "number", "value": 5})})
+    outs = [("long reasoning ok</think>\n\\boxed{5}", 50, "stop"),
+            ("short</think>\n\\boxed{5}", 10, "stop"),
+            ("shortest but cut</think>\n\\boxed{5}", 5, "length"),
+            ("wrong</think>\n\\boxed{6}", 8, "stop")]
+    stat, rows = score_prompt(row, outs, 1.0)
+    assert stat["pass_rate"] == 0.75 and stat["answers"] == ["5", "5", "5", "6"]
+    assert [r["enable_thinking"] for r in rows] == [True, False]
+    assert rows[0]["messages"][-1]["content"] == "<think>\nshort\n</think>\n\n\\boxed{5}"
+    assert rows[1]["messages"][-1]["content"] == "\\boxed{5}"
