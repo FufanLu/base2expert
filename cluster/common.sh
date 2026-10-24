@@ -35,7 +35,7 @@ CUDA_TAG=${CUDA_TAG:-cu129}
 # Bump the REV of an env when its package set changes: nodes keep unpacked
 # envs, and a new name is what makes them unpack the new one.
 TRAIN_REV=${TRAIN_REV:-r1}
-TOOLS_REV=${TOOLS_REV:-r1}
+TOOLS_REV=${TOOLS_REV:-r2}  # r2: + spacy (datatrove word tokenizers need it)
 NANOCHAT_REV=${NANOCHAT_REV:-r1}
 
 env_name() {

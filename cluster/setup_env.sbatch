@@ -80,7 +80,7 @@ tools)
     "datatrove[processing,io]==0.10.1" "fasttext-numpy2-wheel" \
     "mlflow==3.17.2" "polars" "duckdb" "pandas" "pyarrow" \
     "huggingface_hub[hf_xet]" "transformers" "sentencepiece" "tiktoken" \
-    "datasketch" "regex" "pydantic>=2" "pyyaml"
+    "datasketch" "regex" "pydantic>=2" "pyyaml" "spacy"
   "${PY[@]}" -c "
 import mergekit, datatrove, fasttext, mlflow, polars, duckdb, transformers
 print('datatrove', datatrove.__version__ if hasattr(datatrove, '__version__') else '?', 'mlflow', mlflow.__version__,

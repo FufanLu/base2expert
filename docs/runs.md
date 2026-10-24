@@ -65,3 +65,8 @@ was read. Nothing here is estimated.
 | 11346950 | IFEval download rerun after NODE_FAIL | short | submitted | — | — |
 | 11346977-78 | FinQA train/dev/test json and ConvFinQA `data.zip` from github.com/czyssrs (`cluster/download_url.sbatch`) | short | submitted | — | — |
 | 11346906 | nanochat tokenizer (`scripts.tok_train`, defaults: 32,768 vocab, 2 B chars of ClimbMix) and the CORE eval bundle download, on a CPU node with internet | short | submitted | — | First attempt failed in sbatch itself (F#16) |
+| 11346950 | IFEval download rerun | short | completed | 2m06s | `ifeval_input_data.jsonl` |
+| 11346977-78 | FinQA train/dev/test json, ConvFinQA `data.zip` from github.com/czyssrs | short | completed | 1-2 min | FinQA train 78.2 MB, dev 11.0 MB, test 14.4 MB; ConvFinQA zip 17.5 MB; sha256 in `data/raw/manifests/` |
+| 11347026 | `tools/datatrove_probe.py`: datatrove's word tokenizers for English and Chinese | short | completed | 35 s | Both fail without spaCy (`Please install spacy to use en/xx word tokenizer`). Chinese (`Languages.chinese` = 'zho') maps to spaCy's multilingual `xx` tokenizer. MinHash dedup shingles words, so the tokenizer decides whether Chinese dedup works at all |
+| 11347234 | Rebuild the tools env as r2 with spaCy | short | submitted | — | — |
+| 11347236 | datatrove probe rerun on tools r2: does spaCy `xx` segment Chinese? | short | queued after 11347234 | — | — |
