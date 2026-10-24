@@ -53,6 +53,9 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--max-len", type=int, default=8192)
     ap.add_argument("--data-root", default="", help="prefix for relative file patterns in the recipe")
+    ap.add_argument("--decontam-index", default="",
+                    help="ItemNgramIndex prefix; documents covering >= 60%% of an eval item are skipped. "
+                         "Needed for sources that bypass clean_pipeline (the chat-format long-CoT data)")
     args = ap.parse_args()
 
     import pyarrow as pa
@@ -63,6 +66,11 @@ def main() -> None:
     shares = sum(s["share"] for s in recipe["sources"])
     assert abs(shares - 1.0) < 1e-6, f"shares sum to {shares}"
     tok = AutoTokenizer.from_pretrained(args.tokenizer)
+    index = None
+    if args.decontam_index:
+        from b2e.data.decontam import ItemNgramIndex
+
+        index = ItemNgramIndex(args.decontam_index)
     eos = tok.convert_tokens_to_ids("<|endoftext|>")
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -77,6 +85,15 @@ def main() -> None:
             texts: Iterator[str] = (render_chat(c, tok) for c in read_column(files, "conversations"))
         else:
             texts = (t for t in read_column(files, "text") if t)
+        skipped = {"n": 0}
+        if index is not None and src.get("decontam", src["kind"] == "chat"):
+            def keep(it: Iterator[str], skipped=skipped) -> Iterator[str]:
+                for t in it:
+                    if index.contaminated(t):
+                        skipped["n"] += 1
+                        continue
+                    yield t
+            texts = keep(texts)
         chunks, n_tok, docs = [], 0, 0
         for d, piece in tokenize_docs(texts, tok, eos, args.max_len, src.get("min_len", 64)):
             chunks.append(piece)
@@ -88,7 +105,7 @@ def main() -> None:
                        out / f"{src['name']}.parquet", row_group_size=1024)
         manifest["sources"][src["name"]] = {"share": src["share"], "budget": int(budget), "tokens": n_tok,
                                             "chunks": len(chunks), "docs": docs, "files": files,
-                                            "exhausted": n_tok < budget}
+                                            "exhausted": n_tok < budget, "decontam_skipped": skipped["n"]}
         print(src["name"], manifest["sources"][src["name"]]["tokens"], "tokens", "(short of budget)" if n_tok < budget else "", flush=True)
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False))
 
