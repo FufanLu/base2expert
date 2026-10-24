@@ -64,13 +64,15 @@ def set_mode(model, mode: str, originals: dict) -> None:
 
 
 @torch.no_grad()
-def run(model, ids_a: torch.Tensor, ids_b: torch.Tensor) -> dict:
+def run(model, ids_a: torch.Tensor, ids_b: torch.Tensor, pass_cu: bool) -> dict:
+    """pass_cu follows verl's rule (workers/engine/fsdp/transformer_impl.py): the
+    packed row's cu_seqlens reach the model only if its forward() takes them."""
     dev = ids_a.device
     la, lb = len(ids_a), len(ids_b)
 
     def fwd(ids, pos, cu):
-        out = model(input_ids=ids[None], attention_mask=None, position_ids=pos[None],
-                    cu_seqlens=cu, cu_seqlens_cpu=None if cu is None else cu.cpu())
+        kw = {} if cu is None or not pass_cu else {"cu_seqlens": cu, "cu_seqlens_cpu": cu.cpu()}
+        out = model(input_ids=ids[None], attention_mask=None, position_ids=pos[None], **kw)
         return out.logits[0]
 
     alone_b = token_logprobs(fwd(ids_b, torch.arange(lb, device=dev), None), ids_b)
@@ -99,36 +101,48 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
     ap.add_argument("--modes", default="kernels,no_conv,no_fla")
+    # cond: Qwen3_5ForConditionalGeneration, the class the checkpoint declares and
+    # verl loads; causal: the text-only Qwen3_5ForCausalLM (what a text-only export
+    # would be loaded as).
+    ap.add_argument("--classes", default="cond,causal")
     ap.add_argument("--out", default="pack_check.json")
     args = ap.parse_args()
 
-    from transformers import AutoTokenizer, Qwen3_5ForConditionalGeneration
+    import inspect
+
+    from transformers import AutoTokenizer, Qwen3_5ForCausalLM, Qwen3_5ForConditionalGeneration
     from transformers.utils.import_utils import is_causal_conv1d_available, is_flash_linear_attention_available
     from verl.models.transformers.monkey_patch import apply_monkey_patch
 
     tok = AutoTokenizer.from_pretrained(args.model)
-    model = Qwen3_5ForConditionalGeneration.from_pretrained(
-        args.model, dtype=torch.bfloat16, attn_implementation="flash_attention_2").cuda().eval()
-    apply_monkey_patch(model, use_remove_padding=True)
     ids_a = torch.tensor(tok(DOC_A)["input_ids"], device="cuda")
     ids_b = torch.tensor(tok(DOC_B)["input_ids"], device="cuda")
-
     report = {
         "model": args.model,
         "flash_linear_attention": is_flash_linear_attention_available(),
         "causal_conv1d": is_causal_conv1d_available(),
-        "modes": {},
+        "classes": {},
     }
-    originals: dict = {}
-    for mode in args.modes.split(","):
-        set_mode(model, mode, originals)
-        report["modes"][mode] = run(model, ids_a, ids_b)
-        r = report["modes"][mode]
-        print(f"{mode:<8} doc B max|Δ| {r['doc_b_max_abs_diff']:.4f}  mean|Δ| {r['doc_b_mean_abs_diff']:.4f}  "
-              f"first 8 {r['doc_b_first8_abs_diff']}  (doc A max|Δ| {r['doc_a_max_abs_diff']:.4f})", flush=True)
+    classes = {"cond": Qwen3_5ForConditionalGeneration, "causal": Qwen3_5ForCausalLM}
+    for cname in args.classes.split(","):
+        model = classes[cname].from_pretrained(
+            args.model, dtype=torch.bfloat16, attn_implementation="flash_attention_2").cuda().eval()
+        apply_monkey_patch(model, use_remove_padding=True)
+        pass_cu = "cu_seqlens" in inspect.signature(model.forward).parameters
+        entry = report["classes"][cname] = {"class": classes[cname].__name__, "verl_passes_cu_seqlens": pass_cu,
+                                            "modes": {}}
+        originals: dict = {}
+        for mode in args.modes.split(","):
+            set_mode(model, mode, originals)
+            r = entry["modes"][mode] = run(model, ids_a, ids_b, pass_cu)
+            print(f"{cname:<6} {mode:<8} cu_seqlens passed={pass_cu}  doc B max|Δ| {r['doc_b_max_abs_diff']:.4f}  "
+                  f"mean|Δ| {r['doc_b_mean_abs_diff']:.4f}  first 8 {r['doc_b_first8_abs_diff']}  "
+                  f"(doc A max|Δ| {r['doc_a_max_abs_diff']:.4f})", flush=True)
+        del model
+        torch.cuda.empty_cache()
     with open(args.out, "w") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)
-    print(json.dumps({k: v for k, v in report.items() if k != "modes"}))
+    print(json.dumps({k: v for k, v in report.items() if k != "classes"}))
 
 
 if __name__ == "__main__":

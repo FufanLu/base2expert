@@ -118,6 +118,11 @@ activate_env() {
     [ -d "$ROOT/envs/ext-$TRAIN_REV" ] || { log "B2E_USE_EXT=1 but $ROOT/envs/ext-$TRAIN_REV is missing"; return 1; }
     export PYTHONPATH="$ROOT/envs/ext-$TRAIN_REV${PYTHONPATH:+:$PYTHONPATH}"
   fi
+  # B2E_EXTRA_PYTHONPATH: extra package directories for one job, e.g. a
+  # prebuilt extension from another project while ours is still building.
+  if [ -n "${B2E_EXTRA_PYTHONPATH:-}" ]; then
+    export PYTHONPATH="$B2E_EXTRA_PYTHONPATH${PYTHONPATH:+:$PYTHONPATH}"
+  fi
   if module load cuda/12.8.0 >/dev/null 2>&1 && command -v nvcc >/dev/null; then
     CUDA_HOME=$(dirname "$(dirname "$(command -v nvcc)")")
     export CUDA_HOME

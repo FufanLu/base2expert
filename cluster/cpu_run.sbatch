@@ -12,5 +12,7 @@
 set -euo pipefail
 source "${B2E_CODE:-/scratch/$USER/b2e/code}/cluster/common.sh"
 stage_env "${ENV_KIND:-train}"
+# STAGE_MODELS="A B": copy these models to /tmp/b2e-models/ first (NFS mmap is slow).
+for m in ${STAGE_MODELS:-}; do stage_model "$m" >/dev/null; done
 cd "$CODE"
 "$@"
