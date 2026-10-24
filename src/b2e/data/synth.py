@@ -75,6 +75,8 @@ def main() -> None:
     ap.add_argument("--per-source", type=int, default=2000)
     ap.add_argument("--max-tokens", type=int, default=6144)
     ap.add_argument("--temperature", type=float, default=0.7)
+    ap.add_argument("--top-p", type=float, default=0.95,
+                    help="1.0 with --temperature 1.0 reproduces RL rollouts, for pass rates that filter the RL pool")
     ap.add_argument("--min-score", type=float, default=1.0, help="graded rewards (CAIL term) count from here")
     ap.add_argument("--chunk", type=int, default=2000,
                     help="prompts per generation call; each chunk is written as it finishes, and a rerun "
@@ -103,7 +105,7 @@ def main() -> None:
             from vllm import LLM, SamplingParams
 
             llm = LLM(model=args.teacher, gpu_memory_utilization=0.9, max_model_len=16384, enable_prefix_caching=True)
-            sp = SamplingParams(n=args.k, temperature=args.temperature, top_p=0.95, max_tokens=args.max_tokens,
+            sp = SamplingParams(n=args.k, temperature=args.temperature, top_p=args.top_p, max_tokens=args.max_tokens,
                                 seed=args.seed)
         chunk = df.iloc[c0:c0 + args.chunk]
         t0 = time.time()
