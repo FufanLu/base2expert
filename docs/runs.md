@@ -196,3 +196,4 @@ was read. Nothing here is estimated.
 | 11351723, 11352126 | (start) Finance and law synthesis | gpu / d4054 | running | — | — |
 | 11353311 | Load check: `expand_files` on `data/cpt/m0` (no heldout/), `PretrainChunkDataset` builds and returns a sample | short | submitted | — | — |
 | 11353312, 11353313 | M0 legs resubmitted (afterok on the check, then afterany) | gpu | submitted | — | — |
+| 11353311 | (result) M0 load check | short | completed | 18 s | 9 files (the nine sources, no `heldout/`, no manifest), 350,431 chunks, sample fields input_ids / position_ids / loss_mask. M0 legs 11353312/13 now wait on the gpu queue only |
