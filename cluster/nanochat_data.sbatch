@@ -17,6 +17,9 @@ stage_env nanochat
 export NANOCHAT_BASE_DIR=$ROOT/pretrain/base
 mkdir -p "$NANOCHAT_BASE_DIR"
 cd "$ROOT/pretrain/nanochat"
+# -P keeps the current directory off sys.path, so nanochat's own package must
+# be put on PYTHONPATH explicitly (docs/failures.md F#14).
+export PYTHONPATH="$ROOT/pretrain/nanochat${PYTHONPATH:+:$PYTHONPATH}"
 t0=$SECONDS
 python -P -m nanochat.dataset -n "$N"
 log "$(ls "$NANOCHAT_BASE_DIR/base_data_climbmix" | wc -l) shards, $(du -sh "$NANOCHAT_BASE_DIR/base_data_climbmix" | cut -f1), in $((SECONDS - t0))s"

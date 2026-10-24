@@ -30,9 +30,14 @@ def tensors(d: Path) -> dict[str, torch.Tensor]:
 def main(model: str, work: str) -> None:
     w = Path(work)
     w.mkdir(parents=True, exist_ok=True)
+    # mergekit rejects the same path twice ("Duplicate merge inputs"), so the
+    # second input of the linear merge is a symlink to the same directory.
+    twin = w / "twin"
+    if not twin.exists():
+        twin.symlink_to(Path(model).resolve(), target_is_directory=True)
     configs = {
         "linear": f"merge_method: linear\nmodels:\n  - model: {model}\n    parameters: {{weight: 0.5}}\n"
-                  f"  - model: {model}\n    parameters: {{weight: 0.5}}\ndtype: float32\n",
+                  f"  - model: {twin}\n    parameters: {{weight: 0.5}}\ndtype: float32\n",
         "ties": f"merge_method: ties\nbase_model: {model}\nmodels:\n  - model: {model}\n"
                 f"    parameters: {{weight: 1.0, density: 1.0}}\ndtype: float32\n",
     }
