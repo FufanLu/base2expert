@@ -69,7 +69,11 @@ def main() -> None:
                     f.write(json.dumps(rec, ensure_ascii=False) + "\n")
             acc = sum(x["score"] for x in recs) / len(recs)
             accs.append(acc)
-            runs.append({"accuracy": round(acc, 4), "boxed_rate": round(sum(x["boxed"] for x in recs) / len(recs), 4),
+            # strict: full marks only (all constraints of an instruction-following prompt, IFEval's
+            # prompt-level number; the same as accuracy for 0/1 verifiers)
+            strict = sum(x["score"] >= 1.0 - 1e-9 for x in recs) / len(recs)
+            runs.append({"accuracy": round(acc, 4), "strict_accuracy": round(strict, 4),
+                         "boxed_rate": round(sum(x["boxed"] for x in recs) / len(recs), 4),
                          "mean_tokens": round(statistics.mean(x["tokens"] for x in recs), 1),
                          "truncated": sum(x["finish"] == "length" for x in recs), "seconds": round(dt, 1)})
             print(name, f"run {r}", runs[-1], flush=True)
