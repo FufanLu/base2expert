@@ -58,5 +58,6 @@
       "gpt4": 4.845,
       "qwen3.5": 4.716
     }
-  }
+  },
+  "vocab_note": "configured sizes, not printed by the job: nanochat tok_train --vocab-size, tiktoken n_vocab, Qwen3.5 config vocab_size (embedding rows)"
 }
