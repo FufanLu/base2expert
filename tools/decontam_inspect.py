@@ -58,6 +58,7 @@ def main() -> None:
             evals = [json.loads(line) for line in f]
     keys = np.load(a.index, mmap_mode="r")
     lengths: Counter = Counter()
+    covered: Counter = Counter()  # (set, split) of each document's best-covered eval item
     longest = []
     shown = 0
     for f in a.files:
@@ -67,18 +68,21 @@ def main() -> None:
             for s, e in r:
                 lengths[min(e - s, 60)] += 1
             longest.append(max((e - s for s, e in r), default=0))
+            if item_idx is not None and evals is not None:
+                cov, j = item_idx.coverage(text)
+                covered[(evals[j]["set"], evals[j]["split"]) if j >= 0 else ("none", "")] += 1
             if shown < a.show:
                 spans = ["".join(u[s:e]) if all(len(x) == 1 for x in u[s:e]) else " ".join(u[s:e]) for s, e in r[:4]]
                 print(f"--- doc {shown}: {len(r)} matching runs, longest {max((e - s for s, e in r), default=0)} units")
                 for sp in spans:
                     print("   ", sp[:160])
-                if item_idx is not None and evals is not None:
-                    cov, j = item_idx.coverage(text)
-                    if j >= 0:
-                        print(f"    best-covered eval item: {evals[j]['set']}/{evals[j]['split']} coverage {cov:.2f}: "
-                              f"{evals[j]['text'][:120]!r}")
+                if item_idx is not None and evals is not None and j >= 0:
+                    print(f"    best-covered eval item: {evals[j]['set']}/{evals[j]['split']} coverage {cov:.2f}: "
+                          f"{evals[j]['text'][:120]!r}")
                 shown += 1
     print("\nrun length (units) -> count:", sorted(lengths.items()))
+    if covered:
+        print("best-covered eval item by set/split:", {f"{k[0]}/{k[1]}": v for k, v in covered.most_common()})
     ls = np.array(longest)
     for t in (13, 20, 30, 50):
         print(f"docs whose longest matching run is >= {t} units: {(ls >= t).sum()} of {len(ls)}")
