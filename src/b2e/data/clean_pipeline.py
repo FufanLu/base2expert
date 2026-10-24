@@ -10,12 +10,13 @@ Steps, in order:
      signatures -> buckets -> clusters -> filter
   6. write parquet
 
-datatrove shingles MinHash text by words from a per-language word tokenizer;
-for Chinese ('zho') that is spaCy's multilingual `xx` tokenizer
-(tools/datatrove_probe.py, job 11347026). Whether `xx` splits Chinese at all
-is checked by the probe rerun 11347236. Either way, the signature step here
-uses the same units as decontamination, English words and single CJK
-characters, so zh and en shards are shingled alike.
+datatrove shingles MinHash text by words from a per-language word tokenizer.
+For Chinese ('zho') datatrove 0.10.1 uses a whitespace tokenizer
+(tools/datatrove_probe.py, job 11347236): a 35-character sentence comes out
+as 2 "words" (the sentence and its full stop), so 5-word shingles barely
+exist and Chinese near-duplicates would pass silently. The signature step
+here uses the same units as decontamination instead, English words and
+single CJK characters, so zh and en shards are shingled alike.
 
     python -P -m b2e.data.clean_pipeline index --eval-texts eval_texts.jsonl --out eval_13gram.npy
     python -P -m b2e.data.clean_pipeline clean --input DIR --glob 'chinese/high/*.parquet' --name fin_zh \\
