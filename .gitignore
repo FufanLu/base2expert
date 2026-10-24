@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+/data/
+/outputs/
+/ckpt/
+/wandb/
+/mlruns/
+.DS_Store
+node_modules/
+pretrain/nanochat/

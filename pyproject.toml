@@ -1,0 +1,45 @@
+[project]
+name = "b2e"
+version = "0.1.0"
+description = "From a base model to domain experts: mid-training, SFT, preference optimization, RL and multi-teacher on-policy distillation"
+requires-python = ">=3.10,<3.13"
+# Runtime deps of the package itself (CPU-side: verifiers, data tools, eval
+# glue). The GPU stack (torch, vLLM, verl, TRL) is installed by
+# cluster/setup_env.sbatch, pinned for the cluster's CUDA 12.8 driver.
+dependencies = [
+  "numpy",
+  "pandas",
+  "pyarrow>=19",
+  "pydantic>=2",
+  "pyyaml",
+  "httpx",
+  "jsonschema",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+markers = ["gpu: needs a GPU and the cluster env (skipped by default)"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+files = ["src/b2e"]
