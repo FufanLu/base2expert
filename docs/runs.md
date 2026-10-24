@@ -87,3 +87,5 @@ was read. Nothing here is estimated.
 | 11347588 | SFT synthesis pilot: Qwen3.6-35B-A3B, thinking on, k=4 per prompt, 500 FinQA + 500 TAT-QA training prompts, keep the shortest verified answer (`b2e.data.synth`) | gpu (H200) | submitted | — | Also measures teacher throughput |
 | 11347553 | (result) Pre-tokenize 5 M tokens of raw finance zh | short / d0013 | completed | — | 3,641 documents → 3,652 chunks, 5,000,242 tokens (mean 1,369 tokens per chunk; few documents exceed 8,192 tokens) |
 | 11347590 | Mid-training smoke: Qwen3.5-4B-Base-chat on the 5 M-token smoke chunks, 1 epoch (~14 steps of 256 sequences), packed, `configs/cpt/m0.yaml`, no model export | gpu-short (H200) | submitted | — | — |
+| 11347306 | Build the frozen 13-gram decontamination index from the 402 MB of eval text (`FrozenNgramIndex.build`) | short / c0604 | completed | 20m12s | 81,597,427 unique 13-grams, 653 MB sorted uint64 array (`data/processed/eval_13gram.npy`); peak RSS 28.5 GB while building. As a Python set (~100 B/entry) this would be ~8 GB per worker |
+| 11347650 | Cleaning-pipeline test on 2,500 docs of finance zh (all five stages, 8 workers) | short | submitted | — | — |
