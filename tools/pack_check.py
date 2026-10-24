@@ -72,7 +72,10 @@ def run(model, ids_a: torch.Tensor, ids_b: torch.Tensor, pass_cu: bool) -> dict:
 
     def fwd(ids, pos, cu):
         kw = {} if cu is None or not pass_cu else {"cu_seqlens": cu, "cu_seqlens_cpu": cu.cpu()}
-        out = model(input_ids=ids[None], attention_mask=None, position_ids=pos[None], **kw)
+        # use_cache=False as in training: verl 0.9.1's patched Gated DeltaNet forward
+        # still reads the pre-5.x cache API (cache_params.conv_states) and fails on
+        # transformers 5.9's DynamicCache (docs/failures.md F#7).
+        out = model(input_ids=ids[None], attention_mask=None, position_ids=pos[None], use_cache=False, **kw)
         return out.logits[0]
 
     alone_b = token_logprobs(fwd(ids_b, torch.arange(lb, device=dev), None), ids_b)
