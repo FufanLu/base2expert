@@ -149,3 +149,7 @@ was read. Nothing here is estimated.
 | 11351417 | (result) General eval build | short | failed | — | F#24 (pandas 3 groupby.apply); 11351424/25 cancelled as dependents |
 | 11351508 | General eval build, rerun after the fix | short | submitted | — | — |
 | 11351510, 11351512 | General / other-domain no-thinking baselines, Qwen3.5-4B-Base-chat and Qwen3.5-4B (after 11351508) | gpu | submitted | — | — |
+| 11351419 | (result) MinHash check, fin_en: 300 removed docs vs the most similar kept doc (exact 5-gram Jaccard) | short / c0628 | completed | — | ≥ 0.9: 254, 0.8-0.9: 23, 0.7-0.8: 10, 0.5-0.7: 8, no kept partner ≥ 0.5: 5 (1.7%). Pairs: identical re-crawls (CNNMoney "Japan election may ease economic gloom", Jaccard 1.000), the same page with an extra header (0.984), one AP story syndicated on two sites (0.877). **The 40% are real duplicates**; the few without a partner fit chained clusters (A~B~C) or chance bucket collisions |
+| 11351420 | (result) MinHash check, law_en | short / c0622 | completed | — | ≥ 0.9: 250, 0.8-0.9: 36, 0.7-0.8: 7, 0.5-0.7: 6, no partner: 1. Same pattern (AP stories on several news sites) |
+| 11351531 | `tools/decontam_inspect.py --items` on law_zh's 292 decontamination drops: which eval item each covers | short | submitted | — | — |
+| 11351508 | (result) General eval build | short | completed | 1m13s | MMLU-Pro 1,400 (14 categories), C-Eval val 1,346 (52 subjects), CMMLU 2,010 (67 subjects) in `data/processed/general/` |
