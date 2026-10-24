@@ -96,3 +96,8 @@ was read. Nothing here is estimated.
 | 11347929 | Cleaning test rerun with the new index and run thresholds (after 11347925) | short | queued | — | — |
 | 11347937 | `tools/pii_inspect.py`: context of every PII match in 2,500 finance zh docs | short | completed | — | ip 19 raw matches, all outline numbers; card 9 raw matches, all table cells glued by the free-spacing pattern (1 passed Luhn and was replaced); mobile 3, all real contact numbers. Patterns fixed (F#18) |
 | 11348017 | Bilingual pre-training shards for the nanochat side track (`pretrain/make_shards.py`): ClimbMix en 65%, Chinese FineWeb-Edu 30%, IndustryCorpus2 domain text 5% by UTF-8 bytes, 250 MB shards + 50 MB validation, into `pretrain/base_bilingual/` | short | running | — | ClimbMix glob excludes its own validation shard 06542. sbatch again reported `Unexpected message received`; following the F#16 rule I waited 70 s and checked by name: the job existed, so no resubmission (a duplicate avoided) |
+| 11347925 | Index rebuild with `max_df=3` | short | failed | 3m39s | Ran in the train env, which lacks datatrove (F#19) |
+| 11347929 | Cleaning test rerun | short | cancelled (dependency failed) | — | — |
+| 11348074 | Index rebuild with `max_df=3`, tools env | short | submitted | — | — |
+| 11348087 | Cleaning test rerun on the new index (after 11348074) | short | queued | — | — |
+| 11348093 | `tools/check_sft_render.py`: thinking / non-thinking SFT examples through verl's MultiTurnSFTDataset | short | submitted | — | — |
