@@ -163,3 +163,18 @@ stage_model() {
 gpu_info() {
   nvidia-smi --query-gpu=index,name,memory.total,driver_version --format=csv,noheader >&2 || true
 }
+
+# check_arch DIR refuses to train from a checkpoint whose config declares a
+# class verl would not pass packed-sequence boundaries to. verl hands
+# `cu_seqlens` only to models whose forward() takes it (its patched
+# Qwen3_5ForConditionalGeneration); a text-only Qwen3_5ForCausalLM export
+# would train with packed sequences leaking into each other (tools/pack_check.py,
+# job 11343348: mean |log-prob diff| 0.47 vs 0.02 noise).
+check_arch() {
+  local arch
+  arch=$(python -P -c "import json,sys; print(json.load(open(sys.argv[1]))['architectures'][0])" "$1/config.json")
+  if [ "$arch" != Qwen3_5ForConditionalGeneration ] && [ "${B2E_ALLOW_ARCH:-}" != "$arch" ]; then
+    log "$1 declares $arch, not Qwen3_5ForConditionalGeneration: packed training would leak (set B2E_ALLOW_ARCH=$arch to override)"
+    return 1
+  fi
+}

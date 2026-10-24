@@ -25,6 +25,7 @@ RMPAD=${RMPAD:-True}
 OFFLOAD=${OFFLOAD:-False}
 STEPS=${STEPS:-10}
 MODEL=$(stage_model "$MODEL_NAME")
+[ "$RMPAD" != True ] || check_arch "$MODEL"
 python -P -c "from transformers.utils.import_utils import is_flash_linear_attention_available as f, is_causal_conv1d_available as c; import flash_attn; print('fla', f(), 'causal_conv1d', c(), 'flash_attn', flash_attn.__version__)"
 
 GSM=$DATA/processed/gsm8k
