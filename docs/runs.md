@@ -127,3 +127,4 @@ was read. Nothing here is estimated.
 | 11347421 | (result) Baseline eval: official Qwen3.5-4B (post-trained), no thinking, greedy, 2 repeats | gpu / d4054 | completed | 8m28s | **FinQA test 0.750 / 0.750, TAT-QA dev 0.839 / 0.850**; \boxed{} 99.5-99.9%; longer answers (476-491 / 384-388 tokens). The general post-trained model is +4.3 (FinQA) and +7.4 (TAT-QA) points over the Base starting point: the finance expert built here should at least match it on finance |
 | 11349022, 11349024 | Baseline evals with thinking on (max 8,192 new tokens, 1 run each) for Qwen3.5-4B-Base-chat and Qwen3.5-4B, FinQA test + TAT-QA dev | gpu | submitted | — | — |
 | 11348190 | (result) Cross-node Ray probe on a hetjob | gpu / d4053 + d4055 | failed | 3m01s | Ray token authentication rejected the driver (F#22) |
+| 11349055 | Cross-node Ray probe rerun with a shared auth token | gpu (2 × H200, hetjob) | submitted | — | — |
