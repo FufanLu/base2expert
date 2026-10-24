@@ -68,6 +68,7 @@ def main() -> None:
         row = {k: round(nbytes / sum(count(d) for d in docs), 3) for k, (count, _) in toks.items()}
         table["bytes_per_token"][tname] = row
         print(f"{tname:<12}" + "".join(f"{row[k]:>12}" for k in toks), flush=True)
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(table, indent=2))
 
 

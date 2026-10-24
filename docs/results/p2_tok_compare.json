@@ -1,0 +1,62 @@
+{
+  "job": 11351468,
+  "note": "bytes per token on the last 200 documents of each cleaned source; printed by pretrain/tok_compare.py before its JSON write failed (F#25)",
+  "vocab": {
+    "nanochat_en": 32768,
+    "bilingual": 65536,
+    "gpt2": 50257,
+    "gpt4": 100277,
+    "qwen3.5": 248320
+  },
+  "bytes_per_token": {
+    "fin_zh": {
+      "nanochat_en": 1.132,
+      "bilingual": 5.237,
+      "gpt2": 1.363,
+      "gpt4": 2.376,
+      "qwen3.5": 4.848
+    },
+    "fin_en": {
+      "nanochat_en": 4.746,
+      "bilingual": 4.758,
+      "gpt2": 4.951,
+      "gpt4": 4.973,
+      "qwen3.5": 4.841
+    },
+    "law_zh": {
+      "nanochat_en": 1.14,
+      "bilingual": 5.0,
+      "gpt2": 1.39,
+      "gpt4": 2.363,
+      "qwen3.5": 4.832
+    },
+    "law_en": {
+      "nanochat_en": 4.663,
+      "bilingual": 4.677,
+      "gpt2": 4.943,
+      "gpt4": 4.968,
+      "qwen3.5": 4.856
+    },
+    "med_zh": {
+      "nanochat_en": 1.129,
+      "bilingual": 4.742,
+      "gpt2": 1.367,
+      "gpt4": 2.168,
+      "qwen3.5": 4.67
+    },
+    "med_en": {
+      "nanochat_en": 4.172,
+      "bilingual": 4.222,
+      "gpt2": 3.609,
+      "gpt4": 4.464,
+      "qwen3.5": 4.21
+    },
+    "general_en": {
+      "nanochat_en": 4.703,
+      "bilingual": 4.734,
+      "gpt2": 4.677,
+      "gpt4": 4.845,
+      "qwen3.5": 4.716
+    }
+  }
+}
