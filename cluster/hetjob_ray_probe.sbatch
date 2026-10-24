@@ -24,7 +24,16 @@ source "${B2E_CODE:-/scratch/$USER/b2e/code}/cluster/common.sh"
 HEAD_HOST=$(scontrol show hostnames "$SLURM_JOB_NODELIST_HET_GROUP_0" | head -1)
 PORT=$((20000 + SLURM_JOB_ID % 20000))
 export RAY_TMPDIR=/tmp/b2e-ray-$SLURM_JOB_ID
-SETUP="source $CODE/cluster/common.sh; stage_env train; export RAY_TMPDIR=$RAY_TMPDIR"
+# Ray 2.59 enables token authentication by default: the head made its own
+# token and the other components' processes were rejected (InvalidAuthToken,
+# docs/failures.md F#22). One token for the whole job, readable only by us,
+# shared through /scratch and removed at the end. Auth stays on because the
+# cluster network is shared with other users.
+TOKEN_FILE=$ROOT/.ray_token_$SLURM_JOB_ID
+(umask 077 && openssl rand -hex 32 >"$TOKEN_FILE")
+trap 'rm -f "$TOKEN_FILE"' EXIT
+export RAY_AUTH_MODE=token RAY_AUTH_TOKEN_PATH=$TOKEN_FILE
+SETUP="source $CODE/cluster/common.sh; stage_env train; export RAY_TMPDIR=$RAY_TMPDIR RAY_AUTH_MODE=token RAY_AUTH_TOKEN_PATH=$TOKEN_FILE"
 srun --het-group=0 --ntasks=1 bash -c "$SETUP; HEAD_IP=\$(hostname -I | awk '{print \$1}'); echo \$HEAD_IP > $LOGS/ray_head_$SLURM_JOB_ID.txt; ray start --head --node-ip-address=\$HEAD_IP --port=$PORT --num-gpus=1 --block" &
 for _ in $(seq 60); do [ -s "$LOGS/ray_head_$SLURM_JOB_ID.txt" ] && break; sleep 5; done
 HEAD_IP=$(cat "$LOGS/ray_head_$SLURM_JOB_ID.txt")
