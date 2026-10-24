@@ -81,3 +81,19 @@ def test_english_runs_keep_thirteen_words(tmp_path):
     FrozenNgramIndex.build([Q], path)
     idx = FrozenNgramIndex(path)
     assert idx.contaminated_by_runs("Context " + Q)
+
+
+def test_item_index_counts_coverage_of_the_item(tmp_path):
+    from b2e.data.decontam import ItemNgramIndex
+
+    statute = "最高人民法院关于审理民间借贷案件适用法律若干问题的规定"
+    item = f"根据{statute}第二十六条，借贷双方约定的利率未超过年利率百分之二十四，出借人请求借款人按照约定的利率支付利息的，人民法院应予支持。下列说法正确的是"
+    prefix = str(tmp_path / "items")
+    ItemNgramIndex.build([item, "另一道完全无关的题目内容，用来检查编号是否正确对应到各自的评测题上面"], prefix)
+    idx = ItemNgramIndex(prefix)
+    quoting = f"新闻稿：法院在判决中引用了{statute}，驳回了原告的全部诉讼请求。"
+    cov, _ = idx.coverage(quoting)
+    assert cov < 0.6 and not idx.contaminated(quoting)
+    copied = "练习题：" + item + "（答案见下页）"
+    cov, which = idx.coverage(copied)
+    assert cov >= 0.9 and which == 0 and idx.contaminated(copied)

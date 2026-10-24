@@ -132,3 +132,62 @@ class FrozenNgramIndex:
 
     def __len__(self) -> int:
         return len(self.keys)
+
+
+class ItemNgramIndex:
+    """Which eval item does a training document copy, and how much of it?
+
+    Following the Qwen2 report's decontamination rule (an n-gram match plus a
+    longest-common-subsequence of at least 60% of the shorter text), a
+    training document is contaminated only when it covers at least
+    `min_coverage` of some eval item's n-grams. Quoting a statute or a slogan
+    that a test question also quotes covers a small part of that item; a
+    copied question (with its options) covers most of it.
+
+    Stored as three arrays: sorted n-gram hashes, the eval item id of each
+    (an n-gram in k items appears k times), and each item's n-gram count.
+    """
+
+    def __init__(self, prefix: str, n: int = 13, max_items_per_ngram: int = 50) -> None:
+        self.n = n
+        self.keys = np.load(prefix + ".keys.npy", mmap_mode="r")
+        self.items = np.load(prefix + ".items.npy", mmap_mode="r")
+        self.item_ngrams = np.load(prefix + ".item_ngrams.npy", mmap_mode="r")
+        self.max_items = max_items_per_ngram
+
+    @staticmethod
+    def build(texts: Iterable[str], prefix: str, n: int = 13) -> tuple[int, int]:
+        keys, items, counts = [], [], []
+        for i, t in enumerate(texts):
+            h = ngram_hashes(t, n)
+            keys.append(h)
+            items.append(np.full(len(h), i, dtype=np.uint32))
+            counts.append(len(h))
+        k = np.concatenate(keys) if keys else np.zeros(0, dtype=np.uint64)
+        it = np.concatenate(items) if items else np.zeros(0, dtype=np.uint32)
+        order = np.argsort(k, kind="stable")
+        np.save(prefix + ".keys.npy", k[order])
+        np.save(prefix + ".items.npy", it[order])
+        np.save(prefix + ".item_ngrams.npy", np.asarray(counts, dtype=np.uint32))
+        return len(k), len(counts)
+
+    def coverage(self, text: str) -> tuple[float, int]:
+        """(highest fraction of one eval item's n-grams found in text, that item's id)."""
+        h = ngram_hashes(text, self.n)
+        if len(h) == 0 or len(self.keys) == 0:
+            return 0.0, -1
+        lo = np.searchsorted(self.keys, h, side="left")
+        hi = np.searchsorted(self.keys, h, side="right")
+        width = hi - lo
+        # an n-gram shared by very many items is phrasing, not content
+        sel = (width > 0) & (width <= self.max_items)
+        if not sel.any():
+            return 0.0, -1
+        ids = np.concatenate([np.asarray(self.items[a:b]) for a, b in zip(lo[sel], hi[sel], strict=True)])
+        uniq, cnt = np.unique(ids, return_counts=True)
+        cov = cnt / np.asarray(self.item_ngrams[uniq]).astype(np.float64)
+        j = int(cov.argmax())
+        return float(cov[j]), int(uniq[j])
+
+    def contaminated(self, text: str, min_coverage: float = 0.6) -> bool:
+        return self.coverage(text)[0] >= min_coverage

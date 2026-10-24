@@ -43,8 +43,19 @@ def main() -> None:
     ap.add_argument("--index", required=True)
     ap.add_argument("--n", type=int, default=13)
     ap.add_argument("--show", type=int, default=15)
+    ap.add_argument("--items", help="ItemNgramIndex prefix: also print the most-covered eval item")
+    ap.add_argument("--eval-texts", help="eval_texts.jsonl matching --items")
     ap.add_argument("files", nargs="+")
     a = ap.parse_args()
+    item_idx = evals = None
+    if a.items:
+        import json
+
+        from b2e.data.decontam import ItemNgramIndex
+
+        item_idx = ItemNgramIndex(a.items, a.n)
+        with open(a.eval_texts) as f:
+            evals = [json.loads(line) for line in f]
     keys = np.load(a.index, mmap_mode="r")
     lengths: Counter = Counter()
     longest = []
@@ -61,6 +72,11 @@ def main() -> None:
                 print(f"--- doc {shown}: {len(r)} matching runs, longest {max((e - s for s, e in r), default=0)} units")
                 for sp in spans:
                     print("   ", sp[:160])
+                if item_idx is not None and evals is not None:
+                    cov, j = item_idx.coverage(text)
+                    if j >= 0:
+                        print(f"    best-covered eval item: {evals[j]['set']}/{evals[j]['split']} coverage {cov:.2f}: "
+                              f"{evals[j]['text'][:120]!r}")
                 shown += 1
     print("\nrun length (units) -> count:", sorted(lengths.items()))
     ls = np.array(longest)

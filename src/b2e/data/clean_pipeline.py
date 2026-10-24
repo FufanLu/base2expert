@@ -5,10 +5,11 @@ Steps, in order:
   2. length filter, and a minimum quality_score when the source provides one
      (BAAI IndustryCorpus2 does)
   3. PII scrub (b2e.data.pii: e-mail, IP, phone, checksum-valid ID and card numbers)
-  4. decontamination against every eval split (b2e.data.decontam): a
-     document is dropped when it shares a run of 13 English words or 20 CJK
-     characters with an eval item; n-grams common to 3+ eval items are not
-     indexed (boilerplate, see docs/runs.md 11347805)
+  4. decontamination against every eval split (b2e.data.decontam.ItemNgramIndex):
+     a document is dropped when it contains at least 60% of one eval item's
+     13-grams (the Qwen2 report's rule: n-gram match plus overlap of 60% of
+     the shorter text). Plain n-gram hits flagged set phrases and quoted
+     statutes instead of copied items (docs/runs.md, 11347805 and 11348345)
   5. MinHash near-duplicate removal, datatrove's four stages:
      signatures -> buckets -> clusters -> filter
   6. write parquet
@@ -21,9 +22,9 @@ exist and Chinese near-duplicates would pass silently. The signature step
 here uses the same units as decontamination instead, English words and
 single CJK characters, so zh and en shards are shingled alike.
 
-    python -P -m b2e.data.clean_pipeline index --eval-texts eval_texts.jsonl --out eval_13gram.npy
+    python -P -m b2e.data.clean_pipeline index --eval-texts eval_texts.jsonl --out eval_items
     python -P -m b2e.data.clean_pipeline clean --input DIR --glob 'chinese/high/*.parquet' --name fin_zh \\
-        --index eval_13gram.npy --work WORK --out OUT --workers 16
+        --index eval_items --work WORK --out OUT --workers 16
 """
 
 from __future__ import annotations
@@ -37,7 +38,7 @@ from datatrove.pipeline.dedup import MinhashDedupSignature
 from datatrove.pipeline.filters.base_filter import BaseFilter
 from datatrove.pipeline.formatters.base import BaseFormatter
 
-from b2e.data.decontam import FrozenNgramIndex, units
+from b2e.data.decontam import ItemNgramIndex, units
 from b2e.data.pii import scrub
 
 
@@ -73,19 +74,23 @@ class ScrubPII(BaseFormatter):
 
 
 class Decontaminate(BaseFilter):
-    name = "🧪 13-gram decontamination"
+    name = "🧪 decontamination (eval-item coverage)"
 
-    def __init__(self, index_path: str, n: int = 13, min_units_en: int = 13, min_units_cjk: int = 20,
-                 exclusion_writer=None):
+    def __init__(self, index_prefix: str, n: int = 13, min_coverage: float = 0.6, exclusion_writer=None):
         super().__init__(exclusion_writer)
-        self.index_path, self.n = index_path, n
-        self.min_units_en, self.min_units_cjk = min_units_en, min_units_cjk
-        self._index: FrozenNgramIndex | None = None
+        self.index_prefix, self.n, self.min_coverage = index_prefix, n, min_coverage
+        self._index: ItemNgramIndex | None = None
+        self._sets: list[str] | None = None
 
     def filter(self, doc: Document) -> bool | tuple[bool, str]:
         if self._index is None:  # loaded in the worker process, shared via mmap
-            self._index = FrozenNgramIndex(self.index_path, self.n)
-        if self._index.contaminated_by_runs(doc.text, self.min_units_en, self.min_units_cjk):
+            self._index = ItemNgramIndex(self.index_prefix, self.n)
+            with open(self.index_prefix + ".item_sets.json") as f:
+                self._sets = json.load(f)
+        cov, item = self._index.coverage(doc.text)
+        if cov >= self.min_coverage:
+            assert self._sets is not None
+            self.stat_update(f"eval_copy_{self._sets[item]}")
             return False, "eval_overlap"
         return True
 
@@ -105,14 +110,18 @@ class MixedLangMinhashSignature(MinhashDedupSignature):
         self.word_tokenizer = UnitWordTokenizer()
 
 
-def build_index(eval_texts: str, out: str, max_df: int = 3) -> None:
-    def texts():
-        with open(eval_texts) as f:
-            for line in f:
-                yield json.loads(line)["text"]
-
-    n = FrozenNgramIndex.build(texts(), out, max_df=max_df)
-    print(json.dumps({"index": out, "ngrams": n, "max_df": max_df, "bytes": os.path.getsize(out)}))
+def build_index(eval_texts: str, prefix: str) -> None:
+    sets, texts = [], []
+    with open(eval_texts) as f:
+        for line in f:
+            r = json.loads(line)
+            sets.append(r["set"])
+            texts.append(r["text"])
+    n_keys, n_items = ItemNgramIndex.build(texts, prefix)
+    with open(prefix + ".item_sets.json", "w") as f:
+        json.dump(sets, f)
+    print(json.dumps({"prefix": prefix, "ngram_entries": n_keys, "items": n_items,
+                      "bytes": sum(os.path.getsize(prefix + s) for s in (".keys.npy", ".items.npy", ".item_ngrams.npy"))}))
 
 
 def clean(args) -> None:
@@ -140,7 +149,8 @@ def clean(args) -> None:
             LengthQualityFilter(args.min_chars, args.max_chars, args.min_quality,
                                 exclusion_writer=ParquetWriter(f"{w}/removed/length_quality")),
             ScrubPII(),
-            Decontaminate(args.index, exclusion_writer=ParquetWriter(f"{w}/removed/decontam")),
+            Decontaminate(args.index, min_coverage=args.min_coverage,
+                          exclusion_writer=ParquetWriter(f"{w}/removed/decontam")),
             ParquetWriter(f"{w}/filtered"),
         ],
         tasks=args.workers, workers=args.workers, logging_dir=f"{w}/logs/filter",
@@ -176,8 +186,7 @@ def main() -> None:
     sub = ap.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("index")
     a.add_argument("--eval-texts", required=True)
-    a.add_argument("--out", required=True)
-    a.add_argument("--max-df", type=int, default=3)
+    a.add_argument("--out", required=True, help="index prefix")
     c = sub.add_parser("clean")
     c.add_argument("--input", required=True)
     c.add_argument("--glob", default="*.parquet")
@@ -191,9 +200,10 @@ def main() -> None:
     c.add_argument("--min-quality", type=float, default=None)
     c.add_argument("--id-key", default="_id")
     c.add_argument("--limit", type=int, default=-1)
+    c.add_argument("--min-coverage", type=float, default=0.6)
     args = ap.parse_args()
     if args.cmd == "index":
-        build_index(args.eval_texts, args.out, args.max_df)
+        build_index(args.eval_texts, args.out)
     else:
         clean(args)
 
