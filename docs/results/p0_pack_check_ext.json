@@ -1,0 +1,193 @@
+{
+  "model": "/tmp/b2e-models/Qwen3.5-4B-Base",
+  "flash_linear_attention": true,
+  "causal_conv1d": true,
+  "classes": {
+    "cond": {
+      "class": "Qwen3_5ForConditionalGeneration",
+      "verl_passes_cu_seqlens": true,
+      "modes": {
+        "kernels": {
+          "len_a": 93,
+          "len_b": 91,
+          "doc_a_max_abs_diff": 0.1035761833190918,
+          "doc_b_max_abs_diff": 0.12062311172485352,
+          "doc_b_mean_abs_diff": 0.015451057814061642,
+          "doc_b_first8_abs_diff": [
+            0.0053,
+            0.0158,
+            0.0357,
+            0.0005,
+            0.0701,
+            0.0126,
+            0.0079,
+            0.0004
+          ],
+          "doc_b_last8_abs_diff": [
+            0.0,
+            0.0642,
+            0.0076,
+            0.0006,
+            0.0026,
+            0.0001,
+            0.0098,
+            0.0004
+          ],
+          "doc_b_mean_logprob_alone": -1.50775146484375,
+          "doc_b_mean_logprob_packed": -1.5111212730407715
+        },
+        "no_conv": {
+          "len_a": 93,
+          "len_b": 91,
+          "doc_a_max_abs_diff": 0.1306438446044922,
+          "doc_b_max_abs_diff": 0.12862539291381836,
+          "doc_b_mean_abs_diff": 0.016281938180327415,
+          "doc_b_first8_abs_diff": [
+            0.016,
+            0.033,
+            0.0033,
+            0.0087,
+            0.0058,
+            0.0011,
+            0.0276,
+            0.0001
+          ],
+          "doc_b_last8_abs_diff": [
+            0.0,
+            0.0,
+            0.0061,
+            0.0001,
+            0.0798,
+            0.1224,
+            0.057,
+            0.0001
+          ],
+          "doc_b_mean_logprob_alone": -1.5154774188995361,
+          "doc_b_mean_logprob_packed": -1.5153028964996338
+        },
+        "no_fla": {
+          "len_a": 93,
+          "len_b": 91,
+          "doc_a_max_abs_diff": 0.10490679740905762,
+          "doc_b_max_abs_diff": 3.752011299133301,
+          "doc_b_mean_abs_diff": 0.47436562180519104,
+          "doc_b_first8_abs_diff": [
+            3.752,
+            0.2661,
+            0.8365,
+            0.0382,
+            1.4029,
+            2.0763,
+            0.5447,
+            0.066
+          ],
+          "doc_b_last8_abs_diff": [
+            0.0311,
+            0.5142,
+            0.1522,
+            0.3721,
+            0.0953,
+            0.9684,
+            0.0463,
+            0.0642
+          ],
+          "doc_b_mean_logprob_alone": -1.5148463249206543,
+          "doc_b_mean_logprob_packed": -1.5556538105010986
+        }
+      }
+    },
+    "causal": {
+      "class": "Qwen3_5ForCausalLM",
+      "verl_passes_cu_seqlens": false,
+      "modes": {
+        "kernels": {
+          "len_a": 93,
+          "len_b": 91,
+          "doc_a_max_abs_diff": 0.1035761833190918,
+          "doc_b_max_abs_diff": 3.512845039367676,
+          "doc_b_mean_abs_diff": 0.4604507088661194,
+          "doc_b_first8_abs_diff": [
+            0.5423,
+            0.2088,
+            0.7577,
+            0.0701,
+            0.7417,
+            1.9714,
+            1.687,
+            0.008
+          ],
+          "doc_b_last8_abs_diff": [
+            0.0289,
+            0.6604,
+            0.3969,
+            0.3694,
+            0.1753,
+            0.3228,
+            0.5231,
+            0.2006
+          ],
+          "doc_b_mean_logprob_alone": -1.50775146484375,
+          "doc_b_mean_logprob_packed": -1.6172022819519043
+        },
+        "no_conv": {
+          "len_a": 93,
+          "len_b": 91,
+          "doc_a_max_abs_diff": 0.1306438446044922,
+          "doc_b_max_abs_diff": 3.5197761058807373,
+          "doc_b_mean_abs_diff": 0.46534717082977295,
+          "doc_b_first8_abs_diff": [
+            0.5955,
+            0.2245,
+            0.7774,
+            0.0871,
+            0.7367,
+            1.9701,
+            1.6912,
+            0.0081
+          ],
+          "doc_b_last8_abs_diff": [
+            0.0289,
+            0.6502,
+            0.3956,
+            0.3135,
+            0.1772,
+            0.2668,
+            0.463,
+            0.219
+          ],
+          "doc_b_mean_logprob_alone": -1.5154774188995361,
+          "doc_b_mean_logprob_packed": -1.6270047426223755
+        },
+        "no_fla": {
+          "len_a": 93,
+          "len_b": 91,
+          "doc_a_max_abs_diff": 0.10490679740905762,
+          "doc_b_max_abs_diff": 3.3625779151916504,
+          "doc_b_mean_abs_diff": 0.4594428241252899,
+          "doc_b_first8_abs_diff": [
+            0.618,
+            0.2339,
+            0.7248,
+            0.0801,
+            0.7076,
+            1.9929,
+            1.7074,
+            0.0077
+          ],
+          "doc_b_last8_abs_diff": [
+            0.0289,
+            0.6616,
+            0.2791,
+            0.3668,
+            0.0978,
+            0.2693,
+            0.5727,
+            0.2203
+          ],
+          "doc_b_mean_logprob_alone": -1.5148463249206543,
+          "doc_b_mean_logprob_packed": -1.6286474466323853
+        }
+      }
+    }
+  }
+}
