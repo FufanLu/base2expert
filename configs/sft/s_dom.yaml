@@ -1,0 +1,50 @@
+# Domain SFT (S-fin / S-law / S-med / S-mix) with verl's SFT trainer on the
+# rejection-sampled teacher data of b2e.data.synth: one row per example with
+# `messages` and `enable_thinking`, rendered per row by verl's
+# MultiTurnSFTDataset (rendering checked by tools/check_sft_render.py, 11348093).
+#   MODEL_NAME=m0 SFT_DATA=<parquet or list> RUN=s_fin sbatch cluster/sft.sbatch s_dom
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - sft_trainer_engine
+  - _self_
+
+data:
+  train_files: ${oc.env:SFT_DATA}
+  val_files: null
+  messages_key: messages
+  enable_thinking_key: enable_thinking
+  pad_mode: no_padding
+  max_length: 12288
+  truncation: error
+  train_batch_size: 64
+  micro_batch_size_per_gpu: 1
+  use_dynamic_bsz: true
+  max_token_len_per_gpu: 32768
+
+model:
+  path: ${oc.env:B2E_MODEL}
+  use_remove_padding: true
+  enable_gradient_checkpointing: true
+
+optim:
+  lr: 1.0e-5
+  lr_warmup_steps_ratio: 0.03
+  lr_scheduler_type: cosine
+  min_lr_ratio: 0.1
+  clip_grad: 1.0
+  weight_decay: 0.0
+
+trainer:
+  project_name: base2expert
+  experiment_name: ${oc.env:RUN}
+  default_local_dir: ${oc.env:B2E_CKPT_DIR}
+  total_epochs: 2
+  logger: [console, wandb]
+  n_gpus_per_node: 1
+  nnodes: 1
+  save_freq: 200
+  max_ckpt_to_keep: 1
+  resume_mode: auto
