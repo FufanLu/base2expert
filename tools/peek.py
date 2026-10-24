@@ -18,7 +18,11 @@ def load(path: str, rows: int) -> pd.DataFrame:
         with open(path) as f:
             return pd.DataFrame([json.loads(next(f)) for _ in range(rows)])
     with open(path) as f:
-        data = json.load(f)
+        text = f.read()
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:  # JSON Lines under a .json name (CMExam)
+        data = [json.loads(x) for x in text.splitlines()[:rows] if x.strip()]
     return pd.DataFrame(data[:rows] if isinstance(data, list) else [data])
 
 

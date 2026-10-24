@@ -33,3 +33,11 @@ def test_yes_no():
 
 def test_md_table():
     assert md_table([["", "2019"], ["revenue", "$ 5"]]) == "|  | 2019 |\n|---|---|\n| revenue | $ 5 |"
+
+
+def test_law_and_choice_dispatch():
+    assert compute_score("cail2018_charges", "\\boxed{盗窃罪}", gt(kind="charges", value=["盗窃"])) == 1.0
+    assert compute_score("cail2018_articles", "\\boxed{264}", gt(kind="articles", value=[264])) == 1.0
+    assert compute_score("cail2018_term", "\\boxed{一年}", gt(kind="term", months=18.0)) == 0.8
+    assert compute_score("medqa", "\\boxed{B}", gt(kind="choice", value="B")) == 1.0
+    assert compute_score("cmexam", "\\boxed{AC}", gt(kind="choice", value="AC")) == 1.0

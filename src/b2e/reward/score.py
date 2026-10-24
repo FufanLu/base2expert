@@ -1,7 +1,8 @@
 """verl reward entry point: route each sample to its verifier by data_source.
 
 verl calls compute_score(data_source, solution_str, ground_truth, extra_info)
-for every rollout. Scores are 1.0 (verified correct) or 0.0. A missing
+for every rollout. Scores are 1.0 (verified correct) or 0.0, except the
+CAIL prison term, which is graded (b2e.reward.legal.term_score). A missing
 \\boxed{} answer scores 0, the same as a wrong one, so the model is never
 paid for the format alone.
 """
@@ -10,6 +11,8 @@ from __future__ import annotations
 
 import json
 
+from b2e.reward.choice import choice_match
+from b2e.reward.legal import norm_articles, norm_charges, term_score
 from b2e.reward.numeric import extract_boxed, numeric_match
 
 SCALE = {"": 1.0, "thousand": 1e3, "million": 1e6, "billion": 1e9, "percent": 1.0}
@@ -33,4 +36,12 @@ def compute_score(data_source: str, solution_str: str, ground_truth, extra_info=
         return 1.0 if check_number(answer, gt) else 0.0
     if gt["kind"] == "text":
         return 1.0 if answer.strip().lower().rstrip(".") == gt["value"] else 0.0
+    if gt["kind"] == "choice":
+        return 1.0 if choice_match(answer, gt["value"]) else 0.0
+    if gt["kind"] == "charges":
+        return 1.0 if norm_charges(answer) == set(gt["value"]) else 0.0
+    if gt["kind"] == "articles":
+        return 1.0 if norm_articles(answer) == set(gt["value"]) else 0.0
+    if gt["kind"] == "term":
+        return term_score(answer, float(gt["months"]), gt.get("death", False), gt.get("life", False))
     raise ValueError(f"unknown ground truth kind {gt['kind']!r} for {data_source}")
