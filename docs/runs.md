@@ -79,3 +79,6 @@ was read. Nothing here is estimated.
 | 11347374 | Build finance RL parquet (`b2e.data.finance`) | short / c0639 | completed | — | FinQA train 6,251 / dev 883 / test 1,147; TAT-QA arithmetic + count questions train 5,857 / dev 738 (span and multi-span left out of RL) |
 | 11347420 | Baseline eval: Qwen3.5-4B-Base-chat on FinQA test (1,147) and TAT-QA dev (738), no thinking, greedy, 2 repeats (`b2e.eval.run_eval`) | gpu (H200) | submitted | — | — |
 | 11347421 | Baseline eval: official Qwen3.5-4B (post-trained), same sets and settings, as the reference to aim for | gpu (H200) | submitted | — | — |
+| 11347516 | Build law (CAIL2018: charges / articles / prison term) and medicine (MedQA, MedMCQA single-answer, CMExam) RL parquet (`b2e.data.law_med`) | short | submitted | — | — |
+| local | Decision: M0 uses warmup + cosine (to 10% of peak), not WSD | — | done | — | verl 0.9.1's FSDP engine implements only `constant` and `cosine` (`workers/engine/fsdp/transformer_impl.py`, NotImplementedError otherwise); WSD exists only in its Megatron optimizer config. Patching the scheduler is not worth the risk; WSD is still exercised by nanochat's warmdown in the side track. `docs/plan.md` updated |
+| 11347553 | Pre-tokenize 5 M tokens of the raw finance zh shard for a mid-training smoke run (`b2e.data.pretokenize`, max 8,192 tokens per chunk) | short | submitted | — | — |

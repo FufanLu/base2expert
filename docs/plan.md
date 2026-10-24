@@ -73,7 +73,7 @@ Short smoke jobs, mostly on `gpu-short`.
 - From Qwen3.5-4B-Base on ~0.5-1B tokens, set after measuring throughput:
   ~55% domain text (three domains, zh+en), 30% general replay, 15% long-CoT
   anneal.
-- LR re-warmup, then WSD decay.
+- LR re-warmup, then cosine decay to 10% of the peak (verl 0.9.1's FSDP engine has only constant and cosine schedules; WSD is used in the nanochat side track).
 - Ablations: replay 0% vs 30% (forgetting); finance-only M0-fin (optional).
 
 ## P4 SFT

@@ -1,0 +1,53 @@
+# Mid-training (continued pre-training) with verl's SFT trainer and the
+# pre-tokenized chunks of b2e.data.pretokenize (b2e.train.cpt_dataset).
+#   MODEL_NAME=Qwen3.5-4B-Base-chat CPT_DATA=<dir with *.parquet> sbatch cluster/cpt.sbatch m0 [overrides]
+# Schedule: warmup then cosine to 10% of the peak. verl 0.9.1's FSDP engine
+# implements only constant and cosine (WSD exists for its Megatron backend
+# only); WSD is covered by the nanochat side track instead.
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - sft_trainer_engine
+  - _self_
+
+data:
+  train_files: ${oc.env:CPT_DATA}
+  val_files: null
+  custom_cls:
+    path: ${oc.env:B2E_CODE}/src/b2e/train/cpt_dataset.py
+    name: PretrainChunkDataset
+  pad_mode: no_padding
+  max_length: 8192
+  truncation: right
+  # sequences per optimizer step; with ~1-2k-token chunks this is ~0.3-0.5M tokens
+  train_batch_size: 256
+  micro_batch_size_per_gpu: 1
+  use_dynamic_bsz: true
+  max_token_len_per_gpu: 32768
+
+model:
+  path: ${oc.env:B2E_MODEL}
+  use_remove_padding: true
+  enable_gradient_checkpointing: true
+
+optim:
+  lr: 2.0e-5
+  lr_warmup_steps_ratio: 0.03
+  lr_scheduler_type: cosine
+  min_lr_ratio: 0.1
+  clip_grad: 1.0
+  weight_decay: 0.1
+
+trainer:
+  project_name: base2expert
+  experiment_name: ${oc.env:RUN}
+  default_local_dir: ${oc.env:B2E_CKPT_DIR}
+  total_epochs: 1
+  logger: [console, wandb]
+  n_gpus_per_node: 1
+  nnodes: 1
+  save_freq: 200
+  max_ckpt_to_keep: 1
+  resume_mode: auto
