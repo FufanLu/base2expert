@@ -33,6 +33,35 @@ torchrun --standalone --nnodes=1 --nproc_per_node=1 -m verl.trainer.sft_trainer 
 if [ "${PUBLISH:-1}" != 1 ]; then log "PUBLISH=0: not merging"; exit 0; fi
 last=$(ls -d "$B2E_CKPT_DIR"/global_step_* 2>/dev/null | sort -V | tail -1)
 [ -n "$last" ] || { log "no checkpoint"; exit 0; }
+# A leg that stopped at the time limit leaves a mid-run checkpoint; publish
+# only when the run is complete (last step = rows / batch size x epochs).
+total=$(python -P - "$CPT_DATA" "$CODE/configs/cpt/$CFG.yaml" "$@" <<'PY'
+import glob, os, sys
+import pyarrow.parquet as pq
+import yaml
+spec, cfg_path, overrides = sys.argv[1], sys.argv[2], sys.argv[3:]
+cfg = yaml.safe_load(open(cfg_path))
+bs = cfg["data"]["train_batch_size"]
+epochs = cfg["trainer"].get("total_epochs", 1)
+for o in overrides:
+    if o.startswith("data.train_batch_size="):
+        bs = int(o.split("=", 1)[1])
+    if o.startswith("trainer.total_epochs="):
+        epochs = int(o.split("=", 1)[1])
+paths = []
+for part in spec.replace(",", " ").split():
+    paths += sorted(glob.glob(os.path.join(part, "*.parquet"))) if os.path.isdir(part) else [part]
+rows = sum(pq.ParquetFile(p).metadata.num_rows for p in paths)
+fixed = cfg["trainer"].get("total_training_steps")
+for o in overrides:
+    if o.startswith("trainer.total_training_steps="):
+        fixed = int(o.split("=", 1)[1])
+# verl's SFT dataloader uses drop_last=True (verl/trainer/sft_trainer.py)
+print(fixed if fixed else (rows // bs) * epochs)
+PY
+)
+step=${last##*global_step_}
+if [ "$step" -lt "$total" ]; then log "checkpoint at step $step of $total: run not finished, not publishing"; exit 0; fi
 log "merging $last"
 rm -rf "$MODELS/$RUN.partial"
 python -P -m verl.model_merger merge --backend fsdp --local_dir "$last" --target_dir "$MODELS/$RUN.partial"
