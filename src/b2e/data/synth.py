@@ -14,6 +14,11 @@ rate (correct / k) is saved as well: it measures difficulty for the teacher
 and is used later to filter the RL prompt pool. Next to it go each sample's
 boxed answer, score and finish reason, so prompts the teacher never solves
 can be audited for a wrong gold answer (19% of the FinQA pilot, 11351439).
+Every sample's full text goes to <stem>_parts/samples_*.parquet, so a
+verifier fix is applied by scoring again on a CPU, not by sampling again
+(F#32 had to be sampled again: the IF run kept only the passing texts).
+--only-ids restricts the run to listed prompts, e.g. the ones a first pass
+never solved.
 
     python -P -m b2e.data.synth --teacher /tmp/b2e-models/Qwen3.6-35B-A3B --k 4 \\
         --per-source 2000 --out sft_fin.parquet finqa_train.parquet tatqa_train.parquet
@@ -86,12 +91,16 @@ def main() -> None:
                          "skips chunks already on disk, so a job that hits its time limit loses one chunk at most")
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--only-ids", default="", help="text file, one prompt id per line: run on these prompts only")
     ap.add_argument("inputs", nargs="+")
     args = ap.parse_args()
 
+    only = set(Path(args.only_ids).read_text().split("\n")) - {""} if args.only_ids else None
     frames = []
     for path in args.inputs:
         df = pd.read_parquet(path)
+        if only is not None:
+            df = df[df["extra_info"].apply(lambda e: e["id"] in only)]
         for _, g in df.groupby("data_source"):
             frames.append(g.sample(n=min(args.per_source, len(g)), random_state=args.seed))
     df = pd.concat(frames, ignore_index=True)
@@ -121,12 +130,15 @@ def main() -> None:
         t0 = time.time()
         outs = llm.chat([list(p) for p in chunk["prompt"]], sp, chat_template_kwargs={"enable_thinking": True})
         dt = time.time() - t0
-        sft, stats = [], []
+        sft, stats, samples = [], [], []
         for row, o in zip(chunk.itertuples(index=False), outs, strict=True):
             stat, rows = score_prompt(row, [(c.text, len(c.token_ids), c.finish_reason) for c in o.outputs],
                                       args.min_score)
             stats.append(stat)
             sft.extend(rows)
+            samples.append({"data_source": row.data_source, "id": row.extra_info["id"],
+                            "texts": [c.text for c in o.outputs]})
+        pd.DataFrame(samples).to_parquet(parts / f"samples_{tag}.parquet", index=False)
         pd.DataFrame(sft).to_parquet(parts / f"sft_{tag}.parquet", index=False)
         st = pd.DataFrame(stats)
         st["seconds"] = dt / len(st)  # the chunk's generation time spread over its prompts

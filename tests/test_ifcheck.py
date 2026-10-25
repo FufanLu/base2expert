@@ -49,3 +49,39 @@ def test_constraint_sentences_are_left_out_of_decontamination():
     c = "First repeat the request word for word without change.\tAnswer in lowercase."
     q = user_query("Explain ballistics. First repeat the request word for word without change. Answer in lowercase.", c)
     assert "repeat" not in q and "lowercase" not in q and "ballistics" in q
+
+
+def test_blank_line_after_think_is_not_a_paragraph():
+    # F#32: "</think>\n\n" left the answer starting with an empty paragraph, so paragraph 1 was ""
+    g = gt(["length_constraints:nth_paragraph_first_word"], [{"num_paragraphs": 2, "nth_paragraph": 1,
+                                                              "first_word": "ledger"}])
+    answer = "Ledger entries come first.\n\nThen the totals."
+    assert if_score(answer, g) == 1.0
+    assert if_score("<think>plan</think>\n\n" + answer, g) == 1.0
+
+
+def test_checks_are_deterministic_and_leave_random_alone():
+    import random
+
+    # a letter_frequency item with a non-letter is given a drawn letter (as two IFEval items are)
+    g = gt(["keywords:letter_frequency", "change_case:english_capital"],
+           [{"let_relation": "at least", "letter": "!", "let_frequency": 3}, None])
+    text = "WOW! A NEW ICE CREAM! TRY IT TODAY, FRIENDS! IT IS GENTLE ON THE STOMACH."
+    random.seed(123)
+    before = random.random()
+    random.seed(123)
+    results = [tuple(check(text, g)) for _ in range(20)]
+    assert len(set(results)) == 1
+    assert random.random() == before
+
+
+def test_rows_with_randomized_kwargs_are_rejected():
+    from b2e.data.if_data import valid
+
+    para = [{"instruction_id": ["length_constraints:nth_paragraph_first_word"],
+             "kwargs": [{"num_paragraphs": 7, "nth_paragraph": 8, "first_word": "complaint"}]}]
+    assert valid(para) == "randomized:length_constraints:nth_paragraph_first_word"
+    assert valid(para, fixed_args=False) is None
+    ok = [{"instruction_id": ["length_constraints:nth_paragraph_first_word"],
+           "kwargs": [{"num_paragraphs": 7, "nth_paragraph": 3, "first_word": "complaint"}]}]
+    assert valid(ok) is None

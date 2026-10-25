@@ -20,15 +20,27 @@ def test_first_exchange_rejects_mode_mismatch():
     assert first_exchange(msgs, {"enable_thinking": False})[1] is False
 
 
+GT = '{"kind": "number", "value": 3.0, "scale": ""}'
+
+
+def synth_rows(n, answer=lambda i, think: "\\boxed{3}"):
+    return [{"data_source": "finqa", "id": str(i), "enable_thinking": think, "ground_truth": GT,
+             "messages": [{"role": "user", "content": f"q{i}"}, {"role": "assistant", "content": answer(i, think)}]}
+            for i in range(n) for think in (True, False)]
+
+
 def test_synth_pairs_are_sampled_together(tmp_path):
-    rows = []
-    for i in range(5):
-        for think in (True, False):
-            rows.append({"data_source": "finqa", "id": str(i), "enable_thinking": think, "ground_truth": "{}",
-                         "messages": [{"role": "user", "content": f"q{i}"}, {"role": "assistant", "content": "a"}]})
     f = tmp_path / "s.parquet"
-    pd.DataFrame(rows).to_parquet(f)
-    out = load_synth([str(f)], 2, random.Random(0))
-    assert len(out) == 4
+    pd.DataFrame(synth_rows(5)).to_parquet(f)
+    out, failed = load_synth([str(f)], 2, random.Random(0))
+    assert len(out) == 4 and failed == 0
     groups = {r["group"] for r in out}
     assert len(groups) == 2 and all(sum(r["group"] == g for r in out) == 2 for g in groups)
+
+
+def test_synth_pairs_failing_the_current_verifier_are_dropped(tmp_path):
+    # prompt 0's non-thinking answer no longer passes: both of its rows go, before sampling
+    f = tmp_path / "s.parquet"
+    pd.DataFrame(synth_rows(3, lambda i, think: "\\boxed{4}" if (i == 0 and not think) else "\\boxed{3}")).to_parquet(f)
+    out, failed = load_synth([str(f)], "all", random.Random(0))
+    assert failed == 1 and {r["group"] for r in out} == {"finqa/1", "finqa/2"}

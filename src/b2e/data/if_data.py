@@ -40,8 +40,17 @@ def row(source: str, idx: str, prompt: str, constraints: list[dict], split: str,
     }
 
 
-def valid(constraints: list[dict]) -> str | None:
-    """None if every checker builds, else the reason."""
+def valid(constraints: list[dict], prompt: str = "", fixed_args: bool = True) -> str | None:
+    """None if every checker builds, else the reason.
+
+    fixed_args: also reject a constraint whose kwargs are missing or out of
+    range, which build_description replaces with a random draw (626 if_multi
+    rows ask for paragraph 8 of 7, 20 copy_span_idx rows have a span that does
+    not fit). The model would be scored on a constraint other than the one its
+    prompt states. Detected by building with two seeds and comparing the args."""
+    import random
+
+    from b2e.reward.ifcheck import build
     from b2e.reward.ifevalg import instructions_registry as reg
 
     for c in constraints:
@@ -51,9 +60,14 @@ def valid(constraints: list[dict]) -> str | None:
             if iid not in reg.INSTRUCTION_DICT:
                 return f"unknown:{iid}"
             try:
-                reg.INSTRUCTION_DICT[iid](iid).build_description(**{k: v for k, v in (kw or {}).items() if v is not None})
+                drawn = []
+                for seed in (1, 2):
+                    random.seed(seed)
+                    drawn.append(json.dumps(build(iid, kw, prompt).get_instruction_args(), sort_keys=True, default=str))
             except Exception as e:  # noqa: BLE001 - any failure makes the row unusable
                 return f"build:{iid}:{type(e).__name__}"
+            if fixed_args and drawn[0] != drawn[1]:
+                return f"randomized:{iid}"
     return None
 
 
@@ -80,11 +94,11 @@ def if_multi(hf: Path, index, drops: Counter, max_chars: int) -> list[dict]:
             drops["not_single_user_turn"] += 1
             continue
         constraints = ast.literal_eval(r.ground_truth)
-        reason = valid(constraints)
+        prompt = msgs[0]["content"]
+        reason = valid(constraints, prompt)
         if reason:
             drops[reason] += 1
             continue
-        prompt = msgs[0]["content"]
         if len(prompt) > max_chars:
             drops["too_long"] += 1
             continue
@@ -103,7 +117,9 @@ def ifeval(hf: Path, drops: Counter) -> list[dict]:
     for r in df.itertuples(index=False):
         kwargs = [dict(k) if k is not None else None for k in r.kwargs]
         constraints = [{"instruction_id": list(r.instruction_id_list), "kwargs": kwargs}]
-        reason = valid(constraints)
+        # the test set stays as published: its two letter_frequency items with a non-letter ("!", "#")
+        # get a drawn letter, as in the official evaluation (deterministic here, see ifcheck)
+        reason = valid(constraints, r.prompt, fixed_args=False)
         if reason:
             drops["ifeval_" + reason] += 1
             continue
