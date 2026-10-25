@@ -13,8 +13,13 @@ request (constraint sentences removed, see user_query) covers >= 60% of an
 eval item (b2e.data.decontam.ItemNgramIndex, the same rule as the corpus
 cleaning) are dropped.
 
+The validation set is pinned by id (configs/data/if_multi_val_ids.txt, the
+1,000 drawn on 10-24). It used to be the first 1,000 of a shuffle of the pool,
+so dropping rows from the pool (F#33) reshuffled it, and prompts already
+synthesized as training data could have moved into validation.
+
     python -P -m b2e.data.if_data --hf $B2E_ROOT/data/hf --index $B2E_ROOT/data/processed/eval_items \\
-        --out $B2E_ROOT/data/processed/if
+        --val-ids configs/data/if_multi_val_ids.txt --out $B2E_ROOT/data/processed/if
 """
 
 from __future__ import annotations
@@ -133,6 +138,7 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--index", default="", help="ItemNgramIndex prefix for decontamination")
     ap.add_argument("--val", type=int, default=1000, help="if_multi prompts held out as a validation set")
+    ap.add_argument("--val-ids", default="", help="file of if_multi ids that form the validation set (overrides --val)")
     ap.add_argument("--max-prompt-chars", type=int, default=12000,
                     help="longer prompts are dropped: RL's prompt budget is 4,096 tokens (configs/rl/base.yaml), "
                          "and one 16 K-token prompt stopped an eval job (F#31)")
@@ -147,7 +153,13 @@ def main() -> None:
     pool = pd.DataFrame(if_multi(args.hf, index, drops, args.max_prompt_chars)).sample(frac=1.0, random_state=args.seed)
     test = pd.DataFrame(ifeval(args.hf, drops))
     args.out.mkdir(parents=True, exist_ok=True)
-    val, train = pool.iloc[: args.val].copy(), pool.iloc[args.val:]
+    if args.val_ids:
+        pinned = set(Path(args.val_ids).read_text().split("\n")) - {""}
+        is_val = pool["extra_info"].apply(lambda e: e["id"] in pinned)
+        val, train = pool[is_val].copy(), pool[~is_val]
+        drops["val_ids_not_in_pool"] = len(pinned) - len(val)  # dropped by the checks above
+    else:
+        val, train = pool.iloc[: args.val].copy(), pool.iloc[args.val:]
     val["extra_info"] = [{**e, "split": "val"} for e in val["extra_info"]]
     train.to_parquet(args.out / "if_multi_train.parquet", index=False)
     val.to_parquet(args.out / "if_multi_val.parquet", index=False)
