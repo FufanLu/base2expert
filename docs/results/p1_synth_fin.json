@@ -1,0 +1,21 @@
+{
+  "prompts": 12108,
+  "k": 4,
+  "kept_prompts": 10333,
+  "seconds": 17201.5,
+  "generated_tokens": 134511470,
+  "tokens_per_s": 7819.7,
+  "truncated_samples": 3448,
+  "pass_rate_by_source": {
+    "finqa": 0.762,
+    "tatqa": 0.812
+  },
+  "never_solved_by_source": {
+    "finqa": 1220,
+    "tatqa": 538
+  },
+  "kept_by_source": {
+    "finqa": 5029,
+    "tatqa": 5304
+  }
+}

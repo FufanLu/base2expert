@@ -1,0 +1,24 @@
+{
+  "prompts": 6000,
+  "k": 4,
+  "kept_prompts": 3083,
+  "seconds": 8193.9,
+  "generated_tokens": 66075321,
+  "tokens_per_s": 8063.9,
+  "truncated_samples": 32,
+  "pass_rate_by_source": {
+    "cail2018_articles": 0.427,
+    "cail2018_charges": 0.534,
+    "cail2018_term": 0.305
+  },
+  "never_solved_by_source": {
+    "cail2018_articles": 974,
+    "cail2018_charges": 877,
+    "cail2018_term": 1065
+  },
+  "kept_by_source": {
+    "cail2018_articles": 1026,
+    "cail2018_charges": 1123,
+    "cail2018_term": 934
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "results": "Qwen3.5-4B-Base-chat-nothink-if",
+  "code": "423577c",
+  "sets": {
+    "if_multi_val": {
+      "run0": {
+        "n": 994,
+        "not_in_data": 6,
+        "accuracy": 0.4576,
+        "strict_accuracy": 0.2123,
+        "accuracy_before": 0.4571,
+        "strict_before": 0.2113,
+        "changed": 1
+      }
+    },
+    "ifeval_test": {
+      "run0": {
+        "n": 541,
+        "not_in_data": 0,
+        "accuracy": 0.7665,
+        "strict_accuracy": 0.6617,
+        "accuracy_before": 0.7646,
+        "strict_before": 0.658,
+        "changed": 2
+      }
+    }
+  }
+}

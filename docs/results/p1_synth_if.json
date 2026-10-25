@@ -1,0 +1,19 @@
+{
+  "prompts": 5000,
+  "k": 4,
+  "kept_prompts": 2467,
+  "seconds": 11666.8,
+  "generated_tokens": 90011724,
+  "tokens_per_s": 7715.2,
+  "truncated_samples": 6909,
+  "skipped_too_long": 0,
+  "pass_rate_by_source": {
+    "if_multi": 0.411
+  },
+  "never_solved_by_source": {
+    "if_multi": 2464
+  },
+  "kept_by_source": {
+    "if_multi": 2467
+  }
+}

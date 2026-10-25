@@ -1,0 +1,28 @@
+{
+  "results": "Qwen3.5-4B-nothink-if",
+  "code": "423577c",
+  "sets": {
+    "if_multi_val": {
+      "run0": {
+        "n": 994,
+        "not_in_data": 6,
+        "accuracy": 0.5921,
+        "strict_accuracy": 0.3048,
+        "accuracy_before": 0.5924,
+        "strict_before": 0.3048,
+        "changed": 1
+      }
+    },
+    "ifeval_test": {
+      "run0": {
+        "n": 541,
+        "not_in_data": 0,
+        "accuracy": 0.8851,
+        "strict_accuracy": 0.8262,
+        "accuracy_before": 0.8832,
+        "strict_before": 0.8226,
+        "changed": 2
+      }
+    }
+  }
+}
