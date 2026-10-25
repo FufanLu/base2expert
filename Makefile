@@ -3,7 +3,7 @@ PY ?= .venv/bin/python
 .PHONY: dev test lint typecheck check push
 
 dev:            ## local CPU env for tests
-	python3 -m venv .venv && .venv/bin/pip install -q uv && .venv/bin/uv pip install --python .venv/bin/python -e ".[dev]"
+	python3 -m venv .venv && .venv/bin/pip install -q uv && .venv/bin/uv pip install --python .venv/bin/python -e ".[dev,reward]"
 
 test:
 	$(PY) -m pytest -q

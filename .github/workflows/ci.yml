@@ -1,6 +1,7 @@
 name: ci
 on:
   push:
+    paths-ignore: ["docs/**", "**/*.md"]  # run logs and notes; no code to test
   pull_request:
 
 jobs:
@@ -14,5 +15,7 @@ jobs:
       - uses: astral-sh/setup-uv@v6
         with:
           python-version: ${{ matrix.python }}
-      - run: uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev]"
+      # reward: the instruction-following verifiers' deps (langdetect, nltk, ...); without them
+      # tests/test_ifcheck.py cannot import the vendored IFEvalG checkers (F#39)
+      - run: uv venv .venv && uv pip install --python .venv/bin/python -e ".[dev,reward]"
       - run: make check
