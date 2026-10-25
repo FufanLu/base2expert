@@ -71,7 +71,7 @@ def user_query(prompt: str, constraint: str) -> str:
     return prompt
 
 
-def if_multi(hf: Path, index, drops: Counter) -> list[dict]:
+def if_multi(hf: Path, index, drops: Counter, max_chars: int) -> list[dict]:
     df = pd.read_parquet(hf / "allenai/IF_multi_constraints_upto5/data/train-00000-of-00001.parquet")
     rows = []
     for r in df.itertuples(index=False):
@@ -85,6 +85,9 @@ def if_multi(hf: Path, index, drops: Counter) -> list[dict]:
             drops[reason] += 1
             continue
         prompt = msgs[0]["content"]
+        if len(prompt) > max_chars:
+            drops["too_long"] += 1
+            continue
         if index is not None and index.contaminated(user_query(prompt, r.constraint)):
             drops["eval_overlap"] += 1
             continue
@@ -114,6 +117,9 @@ def main() -> None:
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--index", default="", help="ItemNgramIndex prefix for decontamination")
     ap.add_argument("--val", type=int, default=1000, help="if_multi prompts held out as a validation set")
+    ap.add_argument("--max-prompt-chars", type=int, default=12000,
+                    help="longer prompts are dropped: RL's prompt budget is 4,096 tokens (configs/rl/base.yaml), "
+                         "and one 16 K-token prompt stopped an eval job (F#31)")
     ap.add_argument("--seed", type=int, default=0)
     args = ap.parse_args()
     index = None
@@ -122,7 +128,7 @@ def main() -> None:
 
         index = ItemNgramIndex(args.index)
     drops: Counter = Counter()
-    pool = pd.DataFrame(if_multi(args.hf, index, drops)).sample(frac=1.0, random_state=args.seed)
+    pool = pd.DataFrame(if_multi(args.hf, index, drops, args.max_prompt_chars)).sample(frac=1.0, random_state=args.seed)
     test = pd.DataFrame(ifeval(args.hf, drops))
     args.out.mkdir(parents=True, exist_ok=True)
     val, train = pool.iloc[: args.val].copy(), pool.iloc[args.val:]

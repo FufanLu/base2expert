@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from b2e.prompts import fits
 from b2e.reward.score import compute_score
 
 
@@ -50,6 +51,10 @@ def main() -> None:
         if args.limit:
             df = df.head(args.limit)
         name = Path(path).stem
+        tok = llm.get_tokenizer()
+        ok = [fits(tok, list(p), args.thinking == "true", args.max_tokens, args.max_model_len) for p in df["prompt"]]
+        skipped = len(ok) - sum(ok)
+        df = df[ok]
         msgs = [list(p) for p in df["prompt"]]
         accs, runs = [], []
         for r in range(args.repeats):
@@ -77,7 +82,7 @@ def main() -> None:
                          "mean_tokens": round(statistics.mean(x["tokens"] for x in recs), 1),
                          "truncated": sum(x["finish"] == "length" for x in recs), "seconds": round(dt, 1)})
             print(name, f"run {r}", runs[-1], flush=True)
-        summary["sets"][name] = {"n": len(df), "runs": runs,
+        summary["sets"][name] = {"n": len(df), "skipped_too_long": skipped, "runs": runs,
                                  "accuracy_mean": round(statistics.mean(accs), 4),
                                  "accuracy_spread": round(max(accs) - min(accs), 4)}
     (out / "summary.json").write_text(json.dumps(summary, indent=2))

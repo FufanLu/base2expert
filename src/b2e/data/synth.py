@@ -28,8 +28,11 @@ from pathlib import Path
 
 import pandas as pd
 
+from b2e.prompts import fits
 from b2e.reward.numeric import extract_boxed
 from b2e.reward.score import compute_score
+
+MAX_MODEL_LEN = 16384
 
 
 def split_thinking(text: str) -> tuple[str, str]:
@@ -104,10 +107,17 @@ def main() -> None:
         if llm is None:
             from vllm import LLM, SamplingParams
 
-            llm = LLM(model=args.teacher, gpu_memory_utilization=0.9, max_model_len=16384, enable_prefix_caching=True)
+            llm = LLM(model=args.teacher, gpu_memory_utilization=0.9, max_model_len=MAX_MODEL_LEN,
+                      enable_prefix_caching=True)
             sp = SamplingParams(n=args.k, temperature=args.temperature, top_p=args.top_p, max_tokens=args.max_tokens,
                                 seed=args.seed)
         chunk = df.iloc[c0:c0 + args.chunk]
+        # drop prompts too long for the context inside the chunk, so chunk boundaries (and the
+        # parts already on disk) stay the same when a run resumes
+        tok = llm.get_tokenizer()
+        ok = [fits(tok, list(p), True, args.max_tokens, MAX_MODEL_LEN) for p in chunk["prompt"]]
+        (parts / f"skipped_{tag}.txt").write_text(str(len(ok) - sum(ok)))
+        chunk = chunk[ok]
         t0 = time.time()
         outs = llm.chat([list(p) for p in chunk["prompt"]], sp, chat_template_kwargs={"enable_thinking": True})
         dt = time.time() - t0
@@ -133,6 +143,7 @@ def main() -> None:
         "prompts": len(st), "k": args.k, "kept_prompts": len(sft_df) // 2, "seconds": round(seconds, 1),
         "generated_tokens": gen_tokens, "tokens_per_s": round(gen_tokens / seconds, 1),
         "truncated_samples": int(st["finish"].apply(lambda f: sum(x == "length" for x in f)).sum()),
+        "skipped_too_long": sum(int(f.read_text()) for f in parts.glob("skipped_*.txt")),
         "pass_rate_by_source": st.groupby("data_source")["pass_rate"].mean().round(3).to_dict(),
         "never_solved_by_source": st[st["pass_rate"] == 0].groupby("data_source").size().to_dict(),
         "kept_by_source": sft_df[sft_df["enable_thinking"]].groupby("data_source").size().to_dict(),
