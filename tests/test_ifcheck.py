@@ -85,3 +85,10 @@ def test_rows_with_randomized_kwargs_are_rejected():
     ok = [{"instruction_id": ["length_constraints:nth_paragraph_first_word"],
            "kwargs": [{"num_paragraphs": 7, "nth_paragraph": 3, "first_word": "complaint"}]}]
     assert valid(ok) is None
+
+
+def test_repeated_dataset_keys_get_unique_ids():
+    from b2e.data.if_data import unique_ids
+
+    assert unique_ids(["a", "hard_coded_1", "b", "hard_coded_1", "hard_coded_1"]) == [
+        "a", "hard_coded_1", "b", "hard_coded_1#1", "hard_coded_1#2"]

@@ -104,6 +104,9 @@ def main() -> None:
         for _, g in df.groupby("data_source"):
             frames.append(g.sample(n=min(args.per_source, len(g)), random_state=args.seed))
     df = pd.concat(frames, ignore_index=True)
+    key = pd.DataFrame({"s": df["data_source"], "i": df["extra_info"].apply(lambda e: e["id"])})
+    if key.duplicated().any():  # pass rates, SFT pairs and --only-ids all identify a prompt by (source, id)
+        raise SystemExit(f"duplicate prompt ids: {key[key.duplicated()].head().values.tolist()}")
     out = Path(args.out)
     parts = out.with_name(out.stem + "_parts")
     parts.mkdir(parents=True, exist_ok=True)

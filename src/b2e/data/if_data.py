@@ -90,8 +90,21 @@ def user_query(prompt: str, constraint: str) -> str:
     return prompt
 
 
+def unique_ids(keys) -> list[str]:
+    """The dataset's keys, with a suffix on repeats: 4 keys ("hard_coded_1", ...) name several different
+    prompts, and every later step (synthesis pairs, pass rates, --only-ids, the pinned validation set)
+    identifies a prompt by its id. The first occurrence keeps its key, so existing ids do not change."""
+    seen: Counter = Counter()
+    out = []
+    for k in keys:
+        out.append(k if not seen[k] else f"{k}#{seen[k]}")
+        seen[k] += 1
+    return out
+
+
 def if_multi(hf: Path, index, drops: Counter, max_chars: int) -> list[dict]:
     df = pd.read_parquet(hf / "allenai/IF_multi_constraints_upto5/data/train-00000-of-00001.parquet")
+    df["key"] = unique_ids(df["key"])
     rows = []
     for r in df.itertuples(index=False):
         msgs = list(r.messages)
@@ -152,6 +165,10 @@ def main() -> None:
     drops: Counter = Counter()
     pool = pd.DataFrame(if_multi(args.hf, index, drops, args.max_prompt_chars)).sample(frac=1.0, random_state=args.seed)
     test = pd.DataFrame(ifeval(args.hf, drops))
+    for name, d in (("if_multi", pool), ("ifeval", test)):
+        ids = d["extra_info"].apply(lambda e: e["id"])
+        if ids.duplicated().any():
+            raise SystemExit(f"{name}: duplicate ids {sorted(set(ids[ids.duplicated()]))[:5]}")
     args.out.mkdir(parents=True, exist_ok=True)
     if args.val_ids:
         pinned = set(Path(args.val_ids).read_text().split("\n")) - {""}

@@ -39,9 +39,12 @@ def main() -> None:
     for f in sorted(args.results.glob("*.run*.jsonl")):
         name, run = f.name.rsplit(".run", 1)
         recs = [json.loads(line) for line in f.open()]
+        missing = sum((r["data_source"], r["id"]) not in gt for r in recs)  # no longer in the set (e.g. F#33 drops)
+        recs = [r for r in recs if (r["data_source"], r["id"]) in gt]
         new = [compute_score(r["data_source"], r["response"], gt[(r["data_source"], r["id"])]) for r in recs]
         out["sets"].setdefault(name, {})[f"run{run.split('.')[0]}"] = {
             "n": len(recs),
+            "not_in_data": missing,
             "accuracy": round(sum(new) / len(new), 4),
             "strict_accuracy": round(sum(s >= 1.0 - 1e-9 for s in new) / len(new), 4),
             "accuracy_before": round(sum(r["score"] for r in recs) / len(recs), 4),
