@@ -1,0 +1,135 @@
+{
+  "model": "/tmp/b2e-models/Qwen3.5-4B",
+  "thinking": "false",
+  "temperature": 0.0,
+  "sets": {
+    "gsm8k_test": {
+      "n": 1319,
+      "skipped_too_long": 0,
+      "runs": [
+        {
+          "accuracy": 0.9431,
+          "strict_accuracy": 0.9431,
+          "boxed_rate": 0.9962,
+          "mean_tokens": 378.6,
+          "truncated": 7,
+          "seconds": 104.0
+        }
+      ],
+      "accuracy_mean": 0.9431,
+      "accuracy_spread": 0.0
+    },
+    "mmlu_pro_test": {
+      "n": 1400,
+      "skipped_too_long": 0,
+      "runs": [
+        {
+          "accuracy": 0.705,
+          "strict_accuracy": 0.705,
+          "boxed_rate": 0.9393,
+          "mean_tokens": 719.9,
+          "truncated": 85,
+          "seconds": 197.4
+        }
+      ],
+      "accuracy_mean": 0.705,
+      "accuracy_spread": 0.0
+    },
+    "ceval_val": {
+      "n": 1346,
+      "skipped_too_long": 0,
+      "runs": [
+        {
+          "accuracy": 0.8039,
+          "strict_accuracy": 0.8039,
+          "boxed_rate": 0.9725,
+          "mean_tokens": 483.3,
+          "truncated": 37,
+          "seconds": 126.6
+        }
+      ],
+      "accuracy_mean": 0.8039,
+      "accuracy_spread": 0.0
+    },
+    "cmmlu_test": {
+      "n": 2010,
+      "skipped_too_long": 0,
+      "runs": [
+        {
+          "accuracy": 0.7896,
+          "strict_accuracy": 0.7896,
+          "boxed_rate": 0.9816,
+          "mean_tokens": 394.2,
+          "truncated": 33,
+          "seconds": 150.8
+        }
+      ],
+      "accuracy_mean": 0.7896,
+      "accuracy_spread": 0.0
+    },
+    "medqa_test": {
+      "n": 1273,
+      "skipped_too_long": 0,
+      "runs": [
+        {
+          "accuracy": 0.7997,
+          "strict_accuracy": 0.7997,
+          "boxed_rate": 0.9654,
+          "mean_tokens": 502.6,
+          "truncated": 16,
+          "seconds": 132.5
+        }
+      ],
+      "accuracy_mean": 0.7997,
+      "accuracy_spread": 0.0
+    },
+    "medmcqa_dev": {
+      "n": 2816,
+      "skipped_too_long": 0,
+      "runs": [
+        {
+          "accuracy": 0.6687,
+          "strict_accuracy": 0.6687,
+          "boxed_rate": 0.9918,
+          "mean_tokens": 253.4,
+          "truncated": 14,
+          "seconds": 143.6
+        }
+      ],
+      "accuracy_mean": 0.6687,
+      "accuracy_spread": 0.0
+    },
+    "cmexam_test": {
+      "n": 6810,
+      "skipped_too_long": 0,
+      "runs": [
+        {
+          "accuracy": 0.7743,
+          "strict_accuracy": 0.7743,
+          "boxed_rate": 0.991,
+          "mean_tokens": 369.0,
+          "truncated": 47,
+          "seconds": 441.5
+        }
+      ],
+      "accuracy_mean": 0.7743,
+      "accuracy_spread": 0.0
+    },
+    "cail_test": {
+      "n": 1000,
+      "skipped_too_long": 0,
+      "runs": [
+        {
+          "accuracy": 0.4946,
+          "strict_accuracy": 0.404,
+          "boxed_rate": 0.996,
+          "mean_tokens": 298.8,
+          "truncated": 4,
+          "seconds": 87.5
+        }
+      ],
+      "accuracy_mean": 0.4946,
+      "accuracy_spread": 0.0
+    }
+  }
+}

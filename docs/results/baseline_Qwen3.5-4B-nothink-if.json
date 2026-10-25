@@ -1,0 +1,39 @@
+{
+  "model": "/tmp/b2e-models/Qwen3.5-4B",
+  "thinking": "false",
+  "temperature": 0.0,
+  "sets": {
+    "ifeval_test": {
+      "n": 541,
+      "skipped_too_long": 0,
+      "runs": [
+        {
+          "accuracy": 0.8832,
+          "strict_accuracy": 0.8226,
+          "boxed_rate": 0.0,
+          "mean_tokens": 390.5,
+          "truncated": 14,
+          "seconds": 67.0
+        }
+      ],
+      "accuracy_mean": 0.8832,
+      "accuracy_spread": 0.0
+    },
+    "if_multi_val": {
+      "n": 1000,
+      "skipped_too_long": 0,
+      "runs": [
+        {
+          "accuracy": 0.5918,
+          "strict_accuracy": 0.303,
+          "boxed_rate": 0.0,
+          "mean_tokens": 703.2,
+          "truncated": 108,
+          "seconds": 163.2
+        }
+      ],
+      "accuracy_mean": 0.5918,
+      "accuracy_spread": 0.0
+    }
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "model": "/tmp/b2e-models/Qwen3.5-4B-Base-chat",
+  "thinking": "false",
+  "temperature": 0.0,
+  "sets": {
+    "gsm8k_test": {
+      "n": 1319,
+      "runs": [
+        {
+          "accuracy": 0.9227,
+          "strict_accuracy": 0.9227,
+          "boxed_rate": 0.9697,
+          "mean_tokens": 524.2,
+          "truncated": 53,
+          "seconds": 132.1
+        }
+      ],
+      "accuracy_mean": 0.9227,
+      "accuracy_spread": 0.0
+    },
+    "mmlu_pro_test": {
+      "n": 1400,
+      "runs": [
+        {
+          "accuracy": 0.6571,
+          "strict_accuracy": 0.6571,
+          "boxed_rate": 0.915,
+          "mean_tokens": 619.9,
+          "truncated": 120,
+          "seconds": 175.4
+        }
+      ],
+      "accuracy_mean": 0.6571,
+      "accuracy_spread": 0.0
+    },
+    "ceval_val": {
+      "n": 1346,
+      "runs": [
+        {
+          "accuracy": 0.7704,
+          "strict_accuracy": 0.7704,
+          "boxed_rate": 0.9606,
+          "mean_tokens": 308.3,
+          "truncated": 42,
+          "seconds": 91.6
+        }
+      ],
+      "accuracy_mean": 0.7704,
+      "accuracy_spread": 0.0
+    },
+    "cmmlu_test": {
+      "n": 2010,
+      "runs": [
+        {
+          "accuracy": 0.7652,
+          "strict_accuracy": 0.7652,
+          "boxed_rate": 0.9647,
+          "mean_tokens": 266.8,
+          "truncated": 54,
+          "seconds": 115.0
+        }
+      ],
+      "accuracy_mean": 0.7652,
+      "accuracy_spread": 0.0
+    },
+    "medqa_test": {
+      "n": 1273,
+      "runs": [
+        {
+          "accuracy": 0.7345,
+          "strict_accuracy": 0.7345,
+          "boxed_rate": 0.9772,
+          "mean_tokens": 231.5,
+          "truncated": 19,
+          "seconds": 84.3
+        }
+      ],
+      "accuracy_mean": 0.7345,
+      "accuracy_spread": 0.0
+    },
+    "medmcqa_dev": {
+      "n": 2816,
+      "runs": [
+        {
+          "accuracy": 0.657,
+          "strict_accuracy": 0.657,
+          "boxed_rate": 0.9936,
+          "mean_tokens": 152.4,
+          "truncated": 18,
+          "seconds": 101.3
+        }
+      ],
+      "accuracy_mean": 0.657,
+      "accuracy_spread": 0.0
+    },
+    "cmexam_test": {
+      "n": 6810,
+      "runs": [
+        {
+          "accuracy": 0.7526,
+          "strict_accuracy": 0.7526,
+          "boxed_rate": 0.9853,
+          "mean_tokens": 191.8,
+          "truncated": 53,
+          "seconds": 260.0
+        }
+      ],
+      "accuracy_mean": 0.7526,
+      "accuracy_spread": 0.0
+    },
+    "cail_test": {
+      "n": 1000,
+      "runs": [
+        {
+          "accuracy": 0.482,
+          "strict_accuracy": 0.401,
+          "boxed_rate": 0.996,
+          "mean_tokens": 147.0,
+          "truncated": 4,
+          "seconds": 66.1
+        }
+      ],
+      "accuracy_mean": 0.482,
+      "accuracy_spread": 0.0
+    }
+  }
+}
