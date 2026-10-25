@@ -13,7 +13,9 @@
 # while train.py runs); PROPOSER=random is the baseline and needs no model.
 # Each TAG is its own clone on branch autoresearch/<TAG>; rerunning a TAG
 # continues it (results.tsv says how many rounds are done).
-#   TAG=oct25-llm PROPOSER=llm ROUNDS=40 sbatch cluster/autoresearch.sbatch
+# NOISE_RUNS (new run only) repeats the unchanged baseline to measure run-to-run
+# spread; MIN_GAIN is the margin a change must beat the best by to be kept.
+#   TAG=oct25-llm PROPOSER=llm ROUNDS=40 NOISE_RUNS=2 MIN_GAIN=0.002 sbatch cluster/autoresearch.sbatch
 set -euo pipefail
 source "${B2E_CODE:-/scratch/$USER/b2e/code}/cluster/common.sh"
 TAG=${TAG:?run tag}; PROPOSER=${PROPOSER:-llm}; ROUNDS=${ROUNDS:-40}
@@ -46,5 +48,6 @@ if [ "$PROPOSER" = llm ]; then
   URL=http://127.0.0.1:$PORT
 fi
 "$TR_PY" -P "$CODE/pretrain/autoresearch/agent.py" --repo "$RUN" --python "$NC_PY" --proposer "$PROPOSER" \
-  ${URL:+--llm-url "$URL"} --rounds "$ROUNDS" --hours "$HOURS" --seed "${SEED:-0}" 2>&1 | tee -a "$LOGS/ar_$TAG.log"
+  ${URL:+--llm-url "$URL"} --rounds "$ROUNDS" --hours "$HOURS" --seed "${SEED:-0}" \
+  --noise-runs "${NOISE_RUNS:-0}" --min-gain "${MIN_GAIN:-0}" 2>&1 | tee -a "$LOGS/ar_$TAG.log"
 log "stretch done: $(($(wc -l <"$RUN/results.tsv") - 1)) rounds in results.tsv"

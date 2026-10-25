@@ -9,15 +9,24 @@ itself is code and the model only proposes: every round
      answers with a DESCRIPTION line and SEARCH/REPLACE blocks (edit.py);
   2. the edit is applied and committed on the run's branch;
   3. train.py runs (10-minute hard timeout) and its summary is parsed;
-  4. lower val_bpb than the best so far: keep the commit; otherwise (worse,
-     equal, crash, invalid edit) reset to the best commit;
+  4. val_bpb lower than the best so far by more than --min-gain: keep the
+     commit; otherwise (worse, equal, crash, invalid edit) reset to the best
+     commit;
   5. a row goes to results.tsv and the full exchange to rounds/NNN.json.
 
 A crash gets one repair attempt with the end of the log. The proposer is
 either the model (--proposer llm, an OpenAI-compatible endpoint, e.g. vLLM
 serving Qwen3.6-35B-A3B on the same GPU) or the baseline (--proposer random):
 one hyperparameter constant perturbed at random, under the same keep / reset
-rule, so the comparison isolates what the model's ideas are worth.
+rule, so the comparison isolates what the model's ideas are worth. It draws
+without replacement (a change already in results.tsv is not tried again),
+because the model is told not to repeat discarded experiments (F#36).
+
+The time budget is wall-clock, so the number of steps, and val_bpb, vary from
+run to run of the same code: the first stretch's accidental repeats differed
+by up to 0.0012. --noise-runs trains the unchanged baseline a few more times
+(status `noise`) to measure that spread, and --min-gain keeps a change only
+if it beats the best by more than the spread.
 
     python -P pretrain/autoresearch/agent.py --repo $AR/repo --python $NC_ENV/bin/python \\
         --proposer llm --llm-url http://127.0.0.1:8000 --llm-model qwen3.6 --rounds 15
@@ -80,7 +89,9 @@ def llm_propose(args, program: str, source: str, results: str, note: str) -> str
         "chat_template_kwargs": {"enable_thinking": True}})
     r.raise_for_status()
     msg = r.json()["choices"][0]["message"]
-    return (msg.get("reasoning_content") or "") + "</think>" + (msg.get("content") or "")
+    # without --reasoning-parser the reasoning stays in content; with one, vLLM names the field
+    # reasoning_content or (newer) reasoning. edit.parse reads only what follows the last </think>.
+    return (msg.get("reasoning_content") or msg.get("reasoning") or "") + "</think>" + (msg.get("content") or "")
 
 
 # constant name -> candidate multipliers or values, for the random baseline
@@ -98,17 +109,24 @@ def _num(text: str) -> float:
     return float(base) ** float(exp) if exp else float(base)
 
 
-def random_propose(rng: random.Random, source: str) -> str:
-    name = rng.choice(sorted(RANDOM_SPACE))
-    m = re.search(rf"^({name}\s*=\s*)([^#\n]+?)(\s*(#.*)?)$", source, re.M)
-    if not m:
-        return f"DESCRIPTION: (random) {name} not found"
-    old = m.group(2).strip()
-    choice = rng.choice(RANDOM_SPACE[name])
-    new = f"{_num(old) * choice:.6g}" if isinstance(choice, float) else choice
-    line = m.group(0)
-    return (f"DESCRIPTION: (random) {name} {old} -> {new}\n<<<<<<< SEARCH\n{line}\n=======\n"
-            f"{m.group(1)}{new}{m.group(3)}\n>>>>>>> REPLACE\n")
+def random_propose(rng: random.Random, source: str, tried: set[str]) -> str | None:
+    """One untried change: a constant drawn uniformly, then one of its untried values; None when all are tried."""
+    options: dict[str, list[tuple[str, str]]] = {}
+    for name in sorted(RANDOM_SPACE):
+        m = re.search(rf"^({name}\s*=\s*)([^#\n]+?)(\s*(#.*)?)$", source, re.M)
+        if not m:
+            continue
+        old = m.group(2).strip()
+        for choice in RANDOM_SPACE[name]:
+            new = f"{_num(old) * choice:.6g}" if isinstance(choice, float) else choice
+            desc = f"(random) {name} {old} -> {new}"
+            if new != old and desc not in tried:
+                block = f"<<<<<<< SEARCH\n{m.group(0)}\n=======\n{m.group(1)}{new}{m.group(3)}\n>>>>>>> REPLACE\n"
+                options.setdefault(name, []).append((desc, block))
+    if not options:
+        return None
+    desc, block = rng.choice(options[rng.choice(sorted(options))])
+    return f"DESCRIPTION: {desc}\n{block}"
 
 
 # --- loop -------------------------------------------------------------------
@@ -127,6 +145,8 @@ def main() -> None:
     ap.add_argument("--hours", type=float, default=0, help="stop starting new rounds after this long (0 = no limit)")
     ap.add_argument("--timeout", type=int, default=600)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--noise-runs", type=int, default=0, help="extra runs of the unchanged baseline (new run only)")
+    ap.add_argument("--min-gain", type=float, default=0.0, help="keep only if val_bpb < best - min_gain")
     args = ap.parse_args()
 
     repo, rng, t0 = args.repo, random.Random(args.seed), time.time()
@@ -152,13 +172,22 @@ def main() -> None:
         record(best_commit, s, "keep", "baseline")
         best, done = s["val_bpb"], 1
         print(f"baseline val_bpb {best:.6f}", flush=True)
+        for i in range(args.noise_runs):
+            s, _ = run_train(repo, args.python, args.timeout)
+            record(best_commit, s, "noise", f"baseline repeat {i + 1}")
+            done += 1
+            print(f"baseline repeat {i + 1}: val_bpb {s.get('val_bpb', 0):.6f}", flush=True)
+    tried = {r.split("\t")[4] for r in tsv.read_text().splitlines()[1:]}
 
     note = ""
     while done < args.rounds and not (args.hours and time.time() - t0 > args.hours * 3600):
         source = (repo / "train.py").read_text()
         exchange: dict = {"round": done, "proposer": args.proposer, "best_before": best}
         answer = (llm_propose(args, program, source, tsv.read_text(), note) if args.proposer == "llm"
-                  else random_propose(rng, source))
+                  else random_propose(rng, source, tried))
+        if answer is None:
+            print("random search space exhausted", flush=True)
+            break
         exchange["answer"] = answer
         try:
             desc, blocks = parse(answer)
@@ -189,11 +218,12 @@ def main() -> None:
                 pass
         if "val_bpb" not in s:
             status = "crash"
-        elif s["val_bpb"] < best:
+        elif s["val_bpb"] < best - args.min_gain:
             status = "keep"
         else:
             status = "discard"
         record(commit, s, status, desc)
+        tried.add(desc)
         exchange.update({"description": desc, "commit": commit, "summary": s, "status": status,
                          "diff": git(repo, "diff", f"{best_commit}..{commit}", "--", "train.py")})
         if status == "keep":

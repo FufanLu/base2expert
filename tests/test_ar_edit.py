@@ -34,10 +34,23 @@ def test_random_proposal_is_a_valid_edit_of_one_constant():
            "TOTAL_BATCH_SIZE = 2**19 # tokens\nWARMDOWN_RATIO = 0.5\nEMBEDDING_LR = 0.6\nUNEMBEDDING_LR = 0.004\n"
            "SCALAR_LR = 0.5\nWEIGHT_DECAY = 0.2\nWARMUP_RATIO = 0.0\nASPECT_RATIO = 64\n")
     rng = random.Random(0)
+    tried: set[str] = set()
     for _ in range(20):
-        desc, blocks = parse(random_propose(rng, src))
+        desc, blocks = parse(random_propose(rng, src, tried))
         out = apply(src, blocks)
         changed = [a for a, b in zip(src.splitlines(), out.splitlines(), strict=True) if a != b]
-        assert len(changed) <= 1 and desc.startswith("(random)")
+        assert len(changed) == 1 and desc.startswith("(random)")
+        assert desc not in tried  # F#36: never the same change twice
+        tried.add(desc)
     log = "---\nval_bpb:          0.997900\npeak_vram_mb:     45060.2\nnum_steps:        953\n"
     assert summary(log) == {"val_bpb": 0.9979, "peak_vram_mb": 45060.2, "num_steps": 953.0}
+
+
+def test_random_search_stops_when_every_change_was_tried():
+    import random
+
+    from agent import RANDOM_SPACE, random_propose
+
+    src = "DEPTH = 8\n"
+    tried = {f"(random) DEPTH 8 -> {v}" for v in RANDOM_SPACE["DEPTH"]}
+    assert random_propose(random.Random(0), src, tried) is None
