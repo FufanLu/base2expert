@@ -39,10 +39,13 @@ if [ "$PROPOSER" = llm ]; then
   # At 0.5 (70.2 of the H200's 140.4 GiB) the KV cache came out at -1.66 GiB and
   # vLLM refused (11360202): weights 65.5 GiB plus graphs and activations need 71.9.
   # 0.62 = 87.0 GiB leaves ~15 GiB of KV cache; with the d8 run's 44 GB peak
-  # (results.tsv) the GPU holds both.
+  # (results.tsv) the GPU holds both. --max-num-seqs: Qwen3.6 is a hybrid (Gated
+  # DeltaNet) model and every running sequence needs one Mamba-state block; 15 GiB
+  # holds 750, below the default 1,024, and vLLM refused (11377316). The
+  # researcher sends one request at a time.
   PORT=$((20000 + SLURM_JOB_ID % 20000))
   "$TR_PY" -P -m vllm.entrypoints.openai.api_server --model "$MODEL" --served-model-name qwen3.6 \
-    --host 127.0.0.1 --port "$PORT" --gpu-memory-utilization 0.62 --max-model-len 40960 \
+    --host 127.0.0.1 --port "$PORT" --gpu-memory-utilization 0.62 --max-model-len 40960 --max-num-seqs 4 \
     --enable-prefix-caching >"$LOGS/ar_vllm_$SLURM_JOB_ID.log" 2>&1 &
   VLLM_PID=$!
   trap 'kill $VLLM_PID 2>/dev/null || true' EXIT

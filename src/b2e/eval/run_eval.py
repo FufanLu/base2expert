@@ -80,6 +80,10 @@ def main() -> None:
             runs.append({"accuracy": round(acc, 4), "strict_accuracy": round(strict, 4),
                          "boxed_rate": round(sum(x["boxed"] for x in recs) / len(recs), 4),
                          "mean_tokens": round(statistics.mean(x["tokens"] for x in recs), 1),
+                         # answers that open a <think> block themselves: with thinking off, the template
+                         # already closed an empty one, so this is the mode switch being ignored (M0 did
+                         # it on every finance answer after mid-training on thinking-only chats)
+                         "reopened_think": round(sum("<think>" in x["response"] for x in recs) / len(recs), 4),
                          "truncated": sum(x["finish"] == "length" for x in recs), "seconds": round(dt, 1)})
             print(name, f"run {r}", runs[-1], flush=True)
         summary["sets"][name] = {"n": len(df), "skipped_too_long": skipped, "runs": runs,
