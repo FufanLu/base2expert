@@ -66,6 +66,7 @@ log "merging $last"
 rm -rf "$MODELS/$RUN.partial"
 python -P -m verl.model_merger merge --backend fsdp --local_dir "$last" --target_dir "$MODELS/$RUN.partial"
 [ -d "$last/huggingface" ] && cp -n "$last"/huggingface/* "$MODELS/$RUN.partial/" 2>/dev/null || true
+keep_tokenizer "$B2E_MODEL" "$MODELS/$RUN.partial"
 check_arch "$MODELS/$RUN.partial"
 rm -rf "$MODELS/$RUN" && mv "$MODELS/$RUN.partial" "$MODELS/$RUN" && touch "$MODELS/$RUN/.complete"
 log "model at $MODELS/$RUN"

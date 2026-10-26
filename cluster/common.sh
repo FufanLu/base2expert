@@ -191,3 +191,20 @@ check_arch() {
     return 1
   fi
 }
+
+# keep_tokenizer FROM DIR gives a merged model the tokenizer and processor
+# files of the model its run started from. verl saves its own copies
+# (re-serialized by transformers 5.9: different tokenizer.json, a
+# tokenizer_config.json without the special-token lists) and the merger adds a
+# generation_config.json; those go to DIR/verl_saved/. Training read FROM's
+# files, so every later step (SFT, eval, RL) reads the same ones (M0, 10-26).
+keep_tokenizer() {
+  local from=$1 dir=$2 f
+  mkdir -p "$dir/verl_saved"
+  for f in tokenizer.json tokenizer_config.json chat_template.jinja vocab.json merges.txt \
+           processor_config.json preprocessor_config.json video_preprocessor_config.json generation_config.json; do
+    [ -f "$dir/$f" ] && mv "$dir/$f" "$dir/verl_saved/"
+    [ -f "$from/$f" ] && [ "$f" != generation_config.json ] && cp "$from/$f" "$dir/"
+  done
+  [ -f "$dir/tokenizer.json" ] || { log "$from has no tokenizer.json"; return 1; }
+}
