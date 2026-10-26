@@ -1,0 +1,70 @@
+{
+  "model": "/tmp/b2e-models/m0",
+  "max_tokens": 2048,
+  "sources": {
+    "fin_en": {
+      "docs": 500,
+      "tokens": 617336,
+      "bytes": 2973439,
+      "bpb": 0.6818,
+      "nats_per_token": 2.2764,
+      "seconds": 29.7
+    },
+    "fin_zh": {
+      "docs": 500,
+      "tokens": 588725,
+      "bytes": 2927994,
+      "bpb": 0.7754,
+      "nats_per_token": 2.6731,
+      "seconds": 27.4
+    },
+    "general_en": {
+      "docs": 500,
+      "tokens": 392178,
+      "bytes": 1810271,
+      "bpb": 0.6778,
+      "nats_per_token": 2.1686,
+      "seconds": 18.5
+    },
+    "general_zh": {
+      "docs": 500,
+      "tokens": 405944,
+      "bytes": 1950800,
+      "bpb": 0.8597,
+      "nats_per_token": 2.8638,
+      "seconds": 19.0
+    },
+    "law_en": {
+      "docs": 500,
+      "tokens": 610742,
+      "bytes": 2930400,
+      "bpb": 0.6604,
+      "nats_per_token": 2.1963,
+      "seconds": 28.3
+    },
+    "law_zh": {
+      "docs": 500,
+      "tokens": 576697,
+      "bytes": 2882608,
+      "bpb": 0.7076,
+      "nats_per_token": 2.4515,
+      "seconds": 27.7
+    },
+    "med_en": {
+      "docs": 500,
+      "tokens": 496844,
+      "bytes": 2173641,
+      "bpb": 0.5624,
+      "nats_per_token": 1.7055,
+      "seconds": 24.2
+    },
+    "med_zh": {
+      "docs": 500,
+      "tokens": 485488,
+      "bytes": 2222008,
+      "bpb": 0.8138,
+      "nats_per_token": 2.5818,
+      "seconds": 23.1
+    }
+  }
+}
