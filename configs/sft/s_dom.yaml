@@ -1,7 +1,9 @@
 # Domain SFT (S-fin / S-law / S-med / S-mix) with verl's SFT trainer on the
 # rejection-sampled teacher data of b2e.data.synth: one row per example with
 # `messages` and `enable_thinking`, rendered per row by verl's
-# MultiTurnSFTDataset (rendering checked by tools/check_sft_render.py, 11348093).
+# MultiTurnSFTDataset through b2e.train.sft_dataset, which renders system
+# prompts in a form Qwen3.5's template accepts (stock verl fails on them:
+# 11378546). Rendering checked by tools/check_sft_render.py.
 #   MODEL_NAME=m0 SFT_DATA=<parquet or list> RUN=s_fin sbatch cluster/sft.sbatch s_dom
 hydra:
   searchpath:
@@ -14,6 +16,9 @@ defaults:
 data:
   train_files: ${oc.env:SFT_DATA}
   val_files: null
+  custom_cls:
+    path: ${oc.env:B2E_CODE}/src/b2e/train/sft_dataset.py
+    name: SystemPromptSFTDataset
   messages_key: messages
   enable_thinking_key: enable_thinking
   pad_mode: no_padding

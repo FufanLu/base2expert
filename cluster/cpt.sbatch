@@ -27,8 +27,8 @@ mkdir -p "$B2E_CKPT_DIR"
 cp "$CODE/VERSION" "$B2E_CKPT_DIR/code_version_$SLURM_JOB_ID.txt" 2>/dev/null || true
 ls -la "$CPT_DATA" >"$B2E_CKPT_DIR/data_listing_$SLURM_JOB_ID.txt"
 cd /tmp
-torchrun --standalone --nnodes=1 --nproc_per_node=1 -m verl.trainer.sft_trainer \
-  --config-path "$CODE/configs/cpt" --config-name "$CFG" "$@" 2>&1 | tee -a "$LOGS/cpt_$RUN.log"
+run_trainer "$LOGS/cpt_$RUN.log" torchrun --standalone --nnodes=1 --nproc_per_node=1 -m verl.trainer.sft_trainer \
+  --config-path "$CODE/configs/cpt" --config-name "$CFG" "$@"
 
 if [ "${PUBLISH:-1}" != 1 ]; then log "PUBLISH=0: not merging"; exit 0; fi
 last=$(ls -d "$B2E_CKPT_DIR"/global_step_* 2>/dev/null | sort -V | tail -1)

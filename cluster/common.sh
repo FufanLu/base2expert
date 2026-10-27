@@ -208,3 +208,29 @@ keep_tokenizer() {
   done
   [ -f "$dir/tokenizer.json" ] || { log "$from has no tokenizer.json"; return 1; }
 }
+
+# run_trainer LOG CMD... runs a trainer with its output also appended to LOG and
+# returns its exit code. A trainer that raised can hang on its way out and hold
+# the GPU to the time limit (SFT smoke 11378546: TemplateError at 06:52, killed
+# by Slurm at 08:51). Once this job's part of LOG shows hydra's "Error
+# executing job", the trainer gets B2E_TRAINER_GRACE seconds (300) to exit;
+# then its process group (torchrun, the trainer, its dataloader workers) is
+# killed.
+run_trainer() {
+  local logf=$1 grace=${B2E_TRAINER_GRACE:-300} start pid t=0; shift
+  touch "$logf"; start=$(stat -c %s "$logf")
+  setsid "$@" > >(tee -a "$logf") 2>&1 &
+  pid=$!
+  while kill -0 "$pid" 2>/dev/null; do
+    sleep "${B2E_TRAINER_POLL:-30}"
+    # not `tail | grep -q`: grep stops early, tail dies of SIGPIPE and pipefail fails the test
+    grep -q "Error executing job" < <(tail -c +"$((start + 1))" "$logf") || continue
+    while kill -0 "$pid" 2>/dev/null && [ "$t" -lt "$grace" ]; do sleep 10; t=$((t + 10)); done
+    if kill -0 "$pid" 2>/dev/null; then
+      log "the trainer raised and is still running ${grace}s later: killing its process group"
+      kill -TERM -- "-$pid" 2>/dev/null || true; sleep 30; kill -KILL -- "-$pid" 2>/dev/null || true
+    fi
+    break
+  done
+  wait "$pid"
+}
