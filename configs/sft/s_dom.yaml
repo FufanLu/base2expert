@@ -50,6 +50,6 @@ trainer:
   logger: [console, wandb]
   n_gpus_per_node: 1
   nnodes: 1
-  save_freq: 200
+  save_freq: 600              # a checkpoint takes ~6 min (54 GB, smoke 11396220); every 200 steps cost ~20% of the run
   max_ckpt_to_keep: 1
   resume_mode: auto
