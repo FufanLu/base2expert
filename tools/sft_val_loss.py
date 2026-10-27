@@ -8,10 +8,18 @@ hf_processor, as tools/check_sft_render.py), so the tokens and the loss mask
 are the ones the student was trained on. vLLM's prompt log-probabilities give
 -log p(token | earlier tokens); the loss is their mean over the target tokens
 (loss_mask = 1), the token mean verl's SFT loss takes. Run it on M0 for the
-value before SFT. Reported per file, per source and per thinking mode.
+value before SFT. Reported per file, per source and per thinking mode, with
+every row's -log p sum and token count kept in the output.
+
+Each mix draws its own val split (F#47), so a row in one mix's val can be in
+another mix's train: S-fin trained on most of mix_mix's finance rows. Pass the
+model's train file(s) as --exclude-train and each file also gets an `unseen`
+summary over the rows whose (source, group) is in none of them; run the
+model it is compared with on the same flags so both cover the same rows.
 
     python -P tools/sft_val_loss.py --model /tmp/b2e-models/s_fin \\
-        --data $B2E_ROOT/data/sft/mix_fin/val.parquet --out results/s_fin/val_loss.json
+        --data $B2E_ROOT/data/sft/mix_fin/val.parquet --out results/s_fin/val_loss.json \\
+        --exclude-train $B2E_ROOT/data/sft/mix_fin/train.parquet
 """
 
 from __future__ import annotations
@@ -39,12 +47,35 @@ def masked_nll(prompt_logprobs: list, ids: list[int], mask: list[int]) -> tuple[
     return nll, n
 
 
+def summarize(recs: list[dict]) -> dict:
+    """Token-mean loss over all rows, per source and per thinking mode."""
+    acc: dict[str, list[float]] = defaultdict(lambda: [0.0, 0])
+    for r in recs:
+        for key in ("all", f"source:{r['source']}", f"mode:{r['mode']}"):
+            acc[key][0] += r["nll"]
+            acc[key][1] += r["n"]
+    res = {k: {"loss": round(v[0] / v[1], 4), "target_tokens": v[1]} for k, v in sorted(acc.items()) if v[1]}
+    if "all" in res:
+        res["all"]["rows"] = len(recs)
+        res["all"]["ppl"] = round(math.exp(res["all"]["loss"]), 3)
+    return res
+
+
+def train_keys(files: list[str]) -> set[tuple[str, str]]:
+    keys: set[tuple[str, str]] = set()
+    for f in files:
+        t = pd.read_parquet(f, columns=["source", "group"])
+        keys.update(zip(t["source"], t["group"], strict=True))
+    return keys
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--model", required=True)
     ap.add_argument("--data", nargs="+", required=True, help="val.parquet files of SFT mixes")
     ap.add_argument("--out", required=True)
     ap.add_argument("--gpu-mem", type=float, default=0.7)
+    ap.add_argument("--exclude-train", nargs="*", default=[], help="train.parquet files the model was trained on")
     args = ap.parse_args()
 
     from omegaconf import OmegaConf
@@ -60,7 +91,8 @@ def main() -> None:
     llm = LLM(model=args.model, gpu_memory_utilization=args.gpu_mem, max_model_len=CFG["max_length"] + 1,
               enable_prefix_caching=False, max_num_batched_tokens=4096)
     sp = SamplingParams(max_tokens=1, prompt_logprobs=0)
-    result: dict = {"model": args.model, "files": {}}
+    seen_keys = train_keys(args.exclude_train)
+    result: dict = {"model": args.model, "exclude_train": args.exclude_train, "files": {}}
     for f in args.data:
         df = pd.read_parquet(f)
         ds = SystemPromptSFTDataset(f, tok, cfg, processor=proc)
@@ -69,22 +101,25 @@ def main() -> None:
         masks = [r["loss_mask"].tolist() for r in rows]
         t0 = time.time()
         outs = llm.generate([{"prompt_token_ids": x} for x in ids], sp, use_tqdm=False)
-        acc: dict[str, list[float]] = defaultdict(lambda: [0.0, 0])
+        recs = []
         for i, o in enumerate(outs):
             nll, n = masked_nll(o.prompt_logprobs, ids[i], masks[i])
-            mode = "think" if bool(df["enable_thinking"].iat[i]) else "nothink"
-            for key in ("all", f"source:{df['source'].iat[i]}", f"mode:{mode}"):
-                acc[key][0] += nll
-                acc[key][1] += n
-        res = {k: {"loss": round(v[0] / v[1], 4), "target_tokens": v[1]} for k, v in sorted(acc.items()) if v[1]}
-        res["all"]["rows"] = len(ids)
+            src, grp = str(df["source"].iat[i]), str(df["group"].iat[i])
+            recs.append({"source": src, "group": grp, "mode": "think" if bool(df["enable_thinking"].iat[i]) else "nothink",
+                         "nll": nll, "n": n, "seen": (src, grp) in seen_keys})
+        res = summarize(recs)
         res["all"]["seconds"] = round(time.time() - t0, 1)
-        res["all"]["ppl"] = round(math.exp(res["all"]["loss"]), 3)
+        if args.exclude_train:
+            res["unseen"] = summarize([r for r in recs if not r["seen"]])
+            res["excluded_rows"] = sum(r["seen"] for r in recs)
+        res["per_row"] = recs
         result["files"][f] = res
-        print(f, json.dumps(res["all"]), flush=True)
+        print(f, json.dumps(res["all"]), "excluded_rows", res.get("excluded_rows"), flush=True)
         for k, v in res.items():
-            if k != "all":
+            if k.startswith(("source:", "mode:")):
                 print("   ", k, v, flush=True)
+        if args.exclude_train:
+            print("    unseen", json.dumps(res["unseen"]), flush=True)
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(result, indent=2))
 

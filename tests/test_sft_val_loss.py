@@ -4,7 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
-from sft_val_loss import masked_nll  # noqa: E402
+from sft_val_loss import masked_nll, summarize  # noqa: E402
 
 
 def lp(token: int, p: float) -> dict:
@@ -26,3 +26,18 @@ def test_first_position_has_no_prediction():
     nll, n = masked_nll([None, lp(5, 0.5)], [4, 5], [1, 1])
     assert n == 1
     assert math.isclose(nll, math.log(2))
+
+
+def test_summarize_token_mean_per_source_and_mode():
+    recs = [{"source": "fin", "mode": "think", "nll": 3.0, "n": 10},
+            {"source": "fin", "mode": "nothink", "nll": 1.0, "n": 10},
+            {"source": "if_synth", "mode": "nothink", "nll": 6.0, "n": 20}]
+    res = summarize(recs)
+    assert res["all"]["loss"] == 0.25 and res["all"]["rows"] == 3 and res["all"]["target_tokens"] == 40
+    assert res["source:fin"]["loss"] == 0.2
+    assert res["mode:nothink"]["loss"] == round(7.0 / 30, 4)
+
+
+def test_summarize_empty_subset():
+    # every row excluded as seen: nothing to report, no division by zero
+    assert summarize([]) == {}
