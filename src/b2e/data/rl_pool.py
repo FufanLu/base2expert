@@ -10,8 +10,12 @@ policy k times per prompt beforehand (b2e.data.synth with --temperature 1.0
 [--low, --high].
 
     python -P -m b2e.data.rl_pool --passrate s_fin_k8_passrate.parquet --low 0.1 --high 0.9 \\
-        --out $B2E_ROOT/data/processed/finance_pool --val finqa_dev.parquet tatqa_dev.parquet \\
-        finqa_train.parquet tatqa_train.parquet
+        --out $B2E_ROOT/data/processed/finance_pool --train finqa_train.parquet tatqa_train.parquet \\
+        --val finqa_dev.parquet tatqa_dev.parquet
+
+The train files are a named option: as a positional list after `--val`, they
+were taken as more val files and the run stopped with "the following arguments
+are required: train" (F#48).
 """
 
 from __future__ import annotations
@@ -31,15 +35,19 @@ def select(pool: pd.DataFrame, rates: pd.DataFrame, low: float, high: float) -> 
     return pool[mask]
 
 
-def main() -> None:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     ap.add_argument("--passrate", required=True, help="b2e.data.synth *_passrate.parquet of the starting policy")
     ap.add_argument("--low", type=float, default=0.1)
     ap.add_argument("--high", type=float, default=0.9)
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--val", nargs="+", required=True, help="validation parquet files, listed as they are")
-    ap.add_argument("train", nargs="+")
-    args = ap.parse_args()
+    ap.add_argument("--train", nargs="+", required=True, help="train parquet files to select from")
+    return ap.parse_args(argv)
+
+
+def main() -> None:
+    args = parse_args()
 
     rates = pd.read_parquet(args.passrate)
     args.out.mkdir(parents=True, exist_ok=True)
