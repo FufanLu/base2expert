@@ -4,7 +4,7 @@
 # for MoE models. Because a sequence ratio moves far less than single-token
 # ratios, its clip range is tiny: 3e-4 / 4e-4 as in the paper.
 # Loss aggregation per verl's recommendation for gspo (core_algos.py).
-#   cluster/submit_rl.sh gspo_fin s_fin finance 3
+#   cluster/submit_rl.sh gspo_fin s_fin finance_pool 3
 hydra:
   searchpath:
     - pkg://verl.trainer.config

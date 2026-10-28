@@ -9,7 +9,7 @@
 # verl 0.9.1's V1 trainer (trainer.use_v1=True, algorithm.filter_groups);
 # whether that path runs here is a P6 smoke. Until then the offline version
 # applies: the RL prompt pool keeps prompts with a pass rate in [0.1, 0.9].
-#   cluster/submit_rl.sh dapo_fin s_fin finance 3
+#   cluster/submit_rl.sh dapo_fin s_fin finance_pool 3
 hydra:
   searchpath:
     - pkg://verl.trainer.config

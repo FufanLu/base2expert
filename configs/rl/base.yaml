@@ -1,8 +1,8 @@
 # Single-turn RL on verifiable domain problems, one GPU, shared by every
 # algorithm in P6 so that only the algorithm differs between runs. A run file
 # composes this one and overrides what it changes (see grpo_fin.yaml).
-# cluster/rl.sbatch exports B2E_RL_DATA (train/val parquet), B2E_MODEL,
-# B2E_CKPT_DIR and B2E_CODE.
+# cluster/rl.sbatch passes the train/val parquet lists as overrides and exports
+# B2E_MODEL, B2E_CKPT_DIR and B2E_CODE.
 defaults:
   - ppo_trainer
   - _self_
@@ -13,8 +13,10 @@ algorithm:
   use_kl_in_reward: false
 
 data:
-  train_files: ${oc.env:B2E_RL_TRAIN}
-  val_files: ${oc.env:B2E_RL_VAL}
+  # Lists, so not ${oc.env:...}: that gives verl the string "[...]" (F#52), and
+  # ${oc.decode:...} breaks the OmegaConf.resolve that main_ppo runs.
+  train_files: ???
+  val_files: ???
   train_batch_size: 128        # prompts per step (x rollout.n samples)
   max_prompt_length: 4096      # FinQA/TAT-QA excerpts with tables
   max_response_length: 4096    # thinking + answer

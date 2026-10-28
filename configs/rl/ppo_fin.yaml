@@ -5,7 +5,7 @@
 # a value head) and gets critic_warmup steps alone first: in the P0 smoke
 # (11343462) the critic's explained variance stayed negative with no warm-up,
 # i.e. its values were worse than predicting the mean return.
-#   cluster/submit_rl.sh ppo_fin s_fin finance 3
+#   cluster/submit_rl.sh ppo_fin s_fin finance_pool 3
 hydra:
   searchpath:
     - pkg://verl.trainer.config
