@@ -56,7 +56,8 @@ def score_prompt(row, outputs, min_score: float) -> tuple[dict, list[dict]]:
     finished on their own (not cut at the token limit) are kept for SFT.
     """
     gt = row.reward_model["ground_truth"]
-    scored = [(compute_score(row.data_source, text, gt), n, text, fin) for text, n, fin in outputs]
+    # generated with enable_thinking=True: an answer without </think> was cut off (F#53)
+    scored = [(compute_score(row.data_source, text, gt, thinking=True), n, text, fin) for text, n, fin in outputs]
     stat = {"data_source": row.data_source, "id": row.extra_info["id"],
             "pass_rate": sum(x[0] >= min_score for x in scored) / len(scored),
             "mean_score": sum(x[0] for x in scored) / len(scored),

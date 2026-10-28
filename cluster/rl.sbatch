@@ -32,6 +32,18 @@ D=$DATA/processed/$RL_DATA
 to_list() { python -P -c "import sys; print('[' + ','.join(repr(l.strip()) for l in open(sys.argv[1]) if l.strip()) + ']')" "$1"; }
 train=$(to_list "$D/rl_train.txt") val=$(to_list "$D/rl_val.txt")
 export B2E_CKPT_DIR=$CKPT/$NAME
+# LEG_STEPS: this leg stops after that many steps, at a checkpoint (verl saves
+# and validates at its last step), instead of being killed at the time limit
+# with the steps since the last save lost. The lr is constant, so moving
+# total_training_steps per leg changes nothing else.
+leg=()
+if [ -n "${LEG_STEPS:-}" ]; then
+  done_steps=$(cat "$B2E_CKPT_DIR/latest_checkpointed_iteration.txt" 2>/dev/null || echo 0)
+  final=$(python -P -c "from omegaconf import OmegaConf; print(OmegaConf.load('$CODE/configs/rl/$RUN.yaml').trainer.total_training_steps)")
+  stop=$((done_steps + LEG_STEPS < final ? done_steps + LEG_STEPS : final))
+  log "leg: steps $done_steps -> $stop of $final"
+  leg=(trainer.total_training_steps=$stop)
+fi
 mkdir -p "$B2E_CKPT_DIR"
 cp "$D"/rl_*.txt "$B2E_CKPT_DIR/" 2>/dev/null || true
 cp "$CODE/VERSION" "$B2E_CKPT_DIR/code_version_$SLURM_JOB_ID.txt" 2>/dev/null || true
@@ -41,5 +53,5 @@ cd /tmp
 python -P -m verl.trainer.main_ppo \
   --config-path "$CODE/configs/rl" --config-name "$RUN" \
   data.train_files="$train" data.val_files="$val" \
-  trainer.experiment_name="$NAME" "$@" 2>&1 | tee -a "$LOGS/rl_$NAME.log"
+  trainer.experiment_name="$NAME" "${leg[@]}" "$@" 2>&1 | tee -a "$LOGS/rl_$NAME.log"
 log "leg done"

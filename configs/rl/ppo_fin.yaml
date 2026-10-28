@@ -25,7 +25,7 @@ data:
 
 actor_rollout_ref:
   actor:
-    ppo_mini_batch_size: 1024
+    ppo_mini_batch_size: 256   # 4 updates per step, as the group methods (base.yaml, F#54)
   rollout:
     n: 1
 
@@ -39,6 +39,7 @@ critic:
     lr_warmup_steps_ratio: 0.0
   use_dynamic_bsz: true
   ppo_max_token_len_per_gpu: 32768
+  ppo_mini_batch_size: 256   # the critic's 4 updates per step
   cliprange_value: 0.5
   fsdp:
     param_offload: true      # actor, ref, critic and the vLLM engine share one H200

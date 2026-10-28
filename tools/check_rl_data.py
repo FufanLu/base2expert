@@ -12,10 +12,16 @@ one string (F#52).
   3. print the row counts per data_source, and the end of one prompt rendered
      with data.apply_chat_template_kwargs (verl's agent loop renders it the
      same way);
-  4. score every row's gold answer, written as \\boxed{...}, with the reward the
-     trainer calls (b2e.reward.score.compute_score): every row must score 1.
+  4. score every row's gold answer, written as \\boxed{...} after </think>,
+     with the reward function as verl loads it (get_custom_reward_fn, so
+     reward.custom_reward_function.reward_kwargs are bound): every row must
+     score 1; and the same answer cut off inside the thinking block (no
+     </think>) must score 0 when thinking is on (F#53);
+  5. print the policy updates per step (train_batch_size / ppo_mini_batch_size,
+     F#54).
 
-Exits 1 if any step fails or any gold answer scores below 1.
+Exits 1 if any step fails, any gold answer scores below 1 or any cut-off
+answer is paid.
 
     B2E_MODEL=/tmp/b2e-models/s_fin B2E_CKPT_DIR=/tmp/x B2E_CODE=$CODE \\
     python -P tools/check_rl_data.py --run grpo_fin --data $DATA/processed/finance_pool
@@ -50,10 +56,9 @@ def main() -> None:
     a = ap.parse_args()
     from hydra import compose, initialize_config_dir
     from omegaconf import OmegaConf
+    from verl.trainer.ppo.reward import get_custom_reward_fn
     from verl.trainer.ppo.utils import create_rl_dataset
     from verl.utils.config import omega_conf_to_dataclass
-
-    from b2e.reward.score import compute_score
 
     conf_dir = Path(__file__).resolve().parents[1] / "configs" / "rl"
     overrides = [f"data.train_files={to_list(a.data / 'rl_train.txt')}",
@@ -67,6 +72,12 @@ def main() -> None:
     tok, proc = model.tokenizer, model.processor
     print("processor:", type(proc).__name__ if proc is not None else None)
     kwargs = OmegaConf.to_container(cfg.data.get("apply_chat_template_kwargs", {}))
+    thinking = bool(kwargs.get("enable_thinking", False))
+    score = get_custom_reward_fn(cfg)
+    print("reward_kwargs:", OmegaConf.to_container(cfg.reward.custom_reward_function.get("reward_kwargs", {})))
+    actor = cfg.actor_rollout_ref.actor
+    print(f"policy updates per step: {cfg.data.train_batch_size} / {actor.ppo_mini_batch_size} = "
+          f"{cfg.data.train_batch_size // actor.ppo_mini_batch_size} (ppo_epochs {actor.ppo_epochs})")
     bad = 0
     for split, files, is_train, max_samples in (
             ("train", cfg.data.train_files, True, cfg.data.get("train_max_samples", -1)),
@@ -74,18 +85,25 @@ def main() -> None:
         ds = create_rl_dataset(files, cfg.data, tok, proc, is_train=is_train, max_samples=max_samples)
         sources: Counter = Counter()
         wrong: Counter = Counter()
+        paid_cut: Counter = Counter()
         for i in range(len(ds)):
             row = ds[i]
             src = row["data_source"]
             sources[src] += 1
             raw = row["reward_model"]["ground_truth"]
             gt = json.loads(raw)
-            if compute_score(src, f"<think>\nx\n</think>\n\n\\boxed{{{gold_text(gt)}}}", raw) < 1:
+            boxed = f"\\boxed{{{gold_text(gt)}}}"
+            info = row.get("extra_info")
+            if score(data_source=src, solution_str=f"x\n</think>\n\n{boxed}", ground_truth=raw, extra_info=info) < 1:
                 wrong[src] += 1
                 if wrong[src] <= 3:
                     print(f"  {split} row {i} ({src}): gold {gt} does not score 1")
-        print(f"{split}: {len(ds)} rows {dict(sources)}; gold scoring below 1: {dict(wrong) or 0}")
-        bad += sum(wrong.values())
+            if thinking and score(data_source=src, solution_str=f"so {boxed}, let me check", ground_truth=raw,
+                                  extra_info=info) > 0:
+                paid_cut[src] += 1
+        print(f"{split}: {len(ds)} rows {dict(sources)}; gold scoring below 1: {dict(wrong) or 0}; "
+              f"cut-off answers paid: {dict(paid_cut) or 0}")
+        bad += sum(wrong.values()) + sum(paid_cut.values())
         renderer = proc if proc is not None else tok
         text = renderer.apply_chat_template(ds[0]["raw_prompt"], add_generation_prompt=True, tokenize=False, **kwargs)
         print(f"{split} row 0 rendered, last 120 chars: {text[-120:]!r}")

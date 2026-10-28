@@ -65,7 +65,8 @@ def main() -> None:
             recs = []
             for row, o in zip(df.itertuples(index=False), res, strict=True):
                 text = o.outputs[0].text
-                score = compute_score(row.data_source, text, row.reward_model["ground_truth"])
+                score = compute_score(row.data_source, text, row.reward_model["ground_truth"],
+                                      thinking=args.thinking == "true")
                 recs.append({"data_source": row.data_source, "id": row.extra_info.get("id"),
                              "score": score, "boxed": "\\boxed{" in text, "tokens": len(o.outputs[0].token_ids),
                              "finish": o.outputs[0].finish_reason, "response": text})

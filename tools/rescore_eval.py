@@ -6,7 +6,7 @@ Writes <results>/rescore.json with the same metrics as summary.json and the
 number of answers whose score changed; the original files stay as they are.
 
     python -P tools/rescore_eval.py --results $B2E_ROOT/results/baseline/Qwen3.5-4B-nothink-if \\
-        --data $B2E_ROOT/data/processed/if/ifeval_test.parquet $B2E_ROOT/data/processed/if/if_multi_val.parquet
+        --data $B2E_ROOT/data/processed/if/ifeval_test.parquet $B2E_ROOT/data/processed/if/if_multi_val.parquet --thinking false
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", type=Path, required=True)
     ap.add_argument("--data", nargs="+", required=True)
+    ap.add_argument("--thinking", choices=["true", "false"], required=True, help="the run_eval --thinking of these answers")
     args = ap.parse_args()
     logging.disable(logging.ERROR)  # langdetect logs every answer it cannot classify
 
@@ -41,7 +42,8 @@ def main() -> None:
         recs = [json.loads(line) for line in f.open()]
         missing = sum((r["data_source"], r["id"]) not in gt for r in recs)  # no longer in the set (e.g. F#33 drops)
         recs = [r for r in recs if (r["data_source"], r["id"]) in gt]
-        new = [compute_score(r["data_source"], r["response"], gt[(r["data_source"], r["id"])]) for r in recs]
+        new = [compute_score(r["data_source"], r["response"], gt[(r["data_source"], r["id"])], thinking=args.thinking == "true")
+               for r in recs]
         out["sets"].setdefault(name, {})[f"run{run.split('.')[0]}"] = {
             "n": len(recs),
             "not_in_data": missing,

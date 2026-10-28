@@ -36,7 +36,12 @@ actor_rollout_ref:
     strategy: fsdp2
     optim:
       lr: 1.0e-6
-    ppo_mini_batch_size: 128
+    # 4 updates per step (32 prompts x 8 each), the GSPO paper's split. With one
+    # update per step (128, as in the smoke 11423710) the policy that is updated
+    # is the one that sampled, every ratio is 1 and no clip ever acts
+    # (pg_clipfrac 0, ppo_kl 0): DAPO's clip-higher and GSPO's sequence clip
+    # would change nothing (F#54).
+    ppo_mini_batch_size: 32
     use_dynamic_bsz: true
     ppo_max_token_len_per_gpu: 32768
     grad_clip: 1.0
@@ -73,6 +78,8 @@ reward:
   custom_reward_function:
     path: ${oc.env:B2E_CODE}/src/b2e/reward/score.py
     name: compute_score
+    reward_kwargs:
+      thinking: ${data.apply_chat_template_kwargs.enable_thinking}   # no </think>: cut off, 0 (F#53)
 
 trainer:
   project_name: base2expert

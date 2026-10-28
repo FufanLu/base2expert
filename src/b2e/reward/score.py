@@ -6,6 +6,14 @@ CAIL prison term, which is graded (b2e.reward.legal.term_score), and
 instruction following, the fraction of constraints met (b2e.reward.ifcheck). A missing
 \\boxed{} answer scores 0, the same as a wrong one, so the model is never
 paid for the format alone.
+
+An answer still inside its thinking block also scores 0: it was cut off at the
+token limit and gave no final answer, even when its reasoning wrote a \\boxed{}
+on the way (F#53: 57 of the 3,072 answers in the GRPO smoke 11423710 were paid
+for that). With thinking=True the chat template opened the block in the prompt,
+so the answer must contain </think>; an answer that opens <think> itself must
+close it either way. verl passes thinking from
+reward.custom_reward_function.reward_kwargs.
 """
 
 from __future__ import annotations
@@ -29,11 +37,13 @@ def check_number(answer: str, gt: dict) -> bool:
     return scale in SCALE and SCALE[scale] != 1.0 and numeric_match(answer, value * SCALE[scale])
 
 
-def compute_score(data_source: str, solution_str: str, ground_truth, extra_info=None) -> float:
+def compute_score(data_source: str, solution_str: str, ground_truth, extra_info=None, thinking: bool = False) -> float:
     gt = json.loads(ground_truth) if isinstance(ground_truth, str) else ground_truth
     if not isinstance(gt, dict) or "kind" not in gt:
         raise ValueError(f"{data_source}: ground truth {ground_truth!r} is not a b2e ground-truth object "
                          "(JSON with a 'kind'); build the set with a b2e.data module")
+    if (thinking or "<think>" in solution_str) and "</think>" not in solution_str:
+        return 0.0
     if gt["kind"] == "ifeval":  # free-form answers with constraints, no \boxed{}
         return if_score(solution_str, gt)
     answer = extract_boxed(solution_str)
