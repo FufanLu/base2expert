@@ -17,7 +17,14 @@ defaults:
 algorithm:
   adv_estimator: gae
   gamma: 1.0       # one reward at the end of the answer; no discounting within it
-  lam: 0.95
+  # 1, not 0.95: every token's return is then the answer's reward itself. With
+  # 0.95 a token's target looks ~20 tokens ahead and bootstraps on the critic's
+  # own values, so over ~2,800-token answers nothing tied the values to the 0/1
+  # reward: they drifted from the value head's start (±16) to ~9, the last
+  # token's advantage became 1 - 9, the policy learned not to finish, and in 8
+  # actor steps every answer ran to 4,096 tokens and scored 0 (11429817, F#56).
+  # verl has one lam for actor and critic (core_algos.compute_gae_advantage_return).
+  lam: 1.0
 
 data:
   train_batch_size: 1024
