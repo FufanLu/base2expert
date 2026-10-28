@@ -4,6 +4,9 @@
 #   cluster/submit_rl.sh RUN MODEL_NAME RL_DATA LEGS [hydra overrides...]
 # Run it on the cluster login node with SBATCH_ACCOUNT set. Every leg counts
 # against the 8-job submit limit.
+# LEG_STEPS=30 (passed on to rl.sbatch) makes each leg stop at a checkpoint
+# after that many steps; size it from the step time so a leg fits in 8 hours.
+#   LEG_STEPS=30 cluster/submit_rl.sh grpo_fin s_fin finance_pool 2
 set -euo pipefail
 RUN=${1:?run} MODEL_NAME=${2:?model} RL_DATA=${3:?data} LEGS=${4:?legs}
 shift 4

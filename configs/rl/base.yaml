@@ -23,6 +23,10 @@ data:
   filter_overlong_prompts: true
   truncation: error
   shuffle: true
+  # verl draws val_max_samples and shuffles the train prompts with this seed;
+  # null (verl's default) gave each run and each leg its own 512 val rows
+  # (11429073), so val curves were not comparable across arms or legs.
+  seed: 42
   dataloader_num_workers: 4
   apply_chat_template_kwargs:
     enable_thinking: true
