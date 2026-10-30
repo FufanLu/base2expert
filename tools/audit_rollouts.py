@@ -3,7 +3,7 @@ algorithm's trajectories are read by hand before its numbers are trusted).
 
 verl writes each step's rollouts to <ckpt>/rollouts/<step>.jsonl (input,
 output, gts, score, step, uid; the uid's first field is the prompt, shared by
-its n samples). Three reports:
+its n samples). Four reports:
 
   scan   per step: the score recomputed with the trainer's compute_score and
          compared with the logged one (any difference is a reward bug or a
