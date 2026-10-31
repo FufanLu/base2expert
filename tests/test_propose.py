@@ -19,6 +19,28 @@ def test_program_must_use_numbers_from_the_excerpt():
     assert not grounded("print((1300 - 1000) / 1000 * 100)", ctx)  # 1300 is not in the excerpt
 
 
+def test_a_percentage_may_be_written_as_a_fraction():
+    ctx = "Income was $1,200 million; the tax rate was 25% in 2019 and 21.5 percent in 2018."
+    assert grounded("print(1200 * 0.25)", ctx)
+    assert grounded("print(1200 * 0.215)", ctx)
+    assert not grounded("print(1200 * 0.12)", ctx)  # 1,200 is not a percentage, so 12 is not 0.12
+
+
+def test_negative_numbers_and_numbers_in_the_question_count():
+    assert grounded("print(-85 - 42)", "| fx impact on sales | -85 | 42 |")  # the AST holds -85 as -(85)
+    ungrounded_before = EXAMPLE.replace("By how many", "With net revenues of $5,400 million in 2020, by how many")
+    ungrounded_before = ungrounded_before.replace("print(round(margin_2019 - margin_2018, 2))",
+                                                  "print(round(margin_2019 - margin_2018 + 5400 * 0, 2))")
+    rows, stats = filter_problems([ungrounded_before], round_idx=1)
+    assert stats == {"kept": 1}
+
+
+def test_an_exponent_of_one_half_is_not_a_unit_constant():
+    # the pilot's two programs with ** 0.5 took a one-year CAGR as a two-year one
+    ctx = "Net income was $45.0 million in 2021 and $52.1 million in 2022."
+    assert not grounded("print(round(((52.1 / 45.0) ** 0.5 - 1) * 100, 2))", ctx)
+
+
 def test_failures_are_counted_by_kind():
     bad_parse = "no tags here"
     bad_prog = EXAMPLE.replace("print(round(margin_2019 - margin_2018, 2))", "import os\nprint(1)")

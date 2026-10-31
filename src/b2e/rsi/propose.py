@@ -8,7 +8,8 @@ if every check passes:
   parse       the answer has <context>, <question> and <program> blocks
   program     b2e.rsi.sandbox runs it and it prints one finite number
   grounded    every number literal in the program (apart from unit constants
-              such as 100 or 1000) appears in the excerpt, so the question is
+              such as 100 or 1000) appears in the excerpt or the question, a
+              percentage also as a fraction (25% as 0.25), so the problem is
               answerable from what the solver will see
   novel       not a near-duplicate of a problem kept earlier (5-gram Jaccard
               of the question + excerpt < 0.8)
@@ -72,7 +73,7 @@ Topic: {topic}. Company: {sector}, fiscal years {y0} and {y1}.
 
 1. In <context>, write a short excerpt of an annual report: two to four sentences and a small Markdown table with plausible, made-up numbers.
 2. In <question>, ask one question that needs two to four arithmetic steps over numbers from the excerpt.
-3. In <program>, write Python that computes the answer from those numbers, written exactly as they appear in the excerpt, and prints only the final number. Use only arithmetic and the math module.
+3. In <program>, write Python that computes the answer from those numbers and prints only the final number. Write each number with the excerpt's digits but without thousands separators (5,260 is 5260). Use only arithmetic, round() and the math module.
 
 Follow this format exactly:
 
@@ -80,6 +81,7 @@ Follow this format exactly:
 
 UNIT_CONSTANTS = {0.0, 1.0, 2.0, 3.0, 4.0, 10.0, 12.0, 100.0, 365.0, 1000.0, 1e6, 1e9}
 _NUM = re.compile(r"(?<![\w.])-?\d[\d,]*(?:\.\d+)?")
+_PCT = re.compile(r"(?<![\w.])(-?\d[\d,]*(?:\.\d+)?)\s*(?:%|percent\b)")
 
 
 def proposer_messages(rng: random.Random) -> list[dict]:
@@ -106,14 +108,20 @@ def numbers_in(text: str) -> set[float]:
 
 
 def grounded(program: str, context: str) -> bool:
+    """Every number literal of the program is a unit constant or one of context's numbers.
+
+    Compared by magnitude: the AST holds -85 as -(85). 0.5 is not a unit
+    constant: both 10-31 pilot programs with ** 0.5 took a one-year CAGR as
+    a two-year one, and this check was what caught them."""
     try:
         tree = ast.parse(program)
     except SyntaxError:
         return False
-    lits = {float(n.value) for n in ast.walk(tree)
+    lits = {abs(float(n.value)) for n in ast.walk(tree)
             if isinstance(n, ast.Constant) and isinstance(n.value, int | float) and not isinstance(n.value, bool)}
-    have = numbers_in(context)
-    return all(v in UNIT_CONSTANTS or any(abs(v - h) <= 1e-9 * max(1.0, abs(h)) for h in have) for v in lits)
+    have = {abs(h) for h in numbers_in(context)}
+    have |= {abs(float(m.group(1).replace(",", ""))) / 100 for m in _PCT.finditer(context)}
+    return all(v in UNIT_CONSTANTS or any(abs(v - h) <= 1e-9 * max(1.0, h) for h in have) for v in lits)
 
 
 def shingles(text: str, n: int = 5) -> set[str]:
@@ -160,7 +168,7 @@ def filter_problems(texts: list[str], round_idx: int, index=None, seen: list[set
         if not res.ok:
             note("program:" + res.error.split(":")[0])
             continue
-        if not grounded(prob["program"], prob["context"]):
+        if not grounded(prob["program"], prob["context"] + "\n" + prob["question"]):
             note("ungrounded")
             continue
         sh = shingles(prob["question"] + " " + prob["context"])
