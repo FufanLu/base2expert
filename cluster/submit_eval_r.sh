@@ -2,16 +2,18 @@
 # Queues the evaluations of RL checkpoints exported by cluster/merge_step.sh
 # (models/<run>_step<N>) with the commands S-fin's ran (cluster/submit_eval_s.sh),
 # on the same hardware types, several models in one job to save submit slots:
-#   PART=h200: finance without thinking (x2) and with thinking, and the 512
-#     val rows the RL trainer scored (`finance_pool/rl_val512.parquet` from
-#     tools/rl_val_rows.py; greedy, thinking, 4,096 tokens, as its val_kwargs),
-#     which checks the export against the log;
+#   PART=h200: finance without thinking (x2) and with thinking, TAT-QA test
+#     the same two ways in dirs of their own (<model>-{nothink,think}-tatqa_test;
+#     F#66: TAT-QA dev also feeds the RL val set), and the 512 val rows the RL
+#     trainer scored (`finance_pool/rl_val512.parquet` from tools/rl_val_rows.py;
+#     greedy, thinking, 4,096 tokens, as its val_kwargs), which checks the
+#     export against the log;
 #   PART=a100 (80 GB): bpb on the M0 held-out documents, general +
 #     law/medicine, IF, and the SFT val loss on the val rows of MIX (default
 #     mix_fin, S-fin's mix), `--exclude-train` its train file as for S-fin.
 # A failed eval does not stop the others in its job; the job then exits 1.
 #   PART=h200 AFTER=<jobid> cluster/submit_eval_r.sh grpo_fin_step90 dapo_fin_step90 gspo_fin_step90
-# The time limit is set from the number of models (H200 ~25 min each, A100
+# The time limit is set from the number of models (H200 ~30 min each, A100
 # ~40); on gpu-short (PARTITION, the default) it must stay within 2 hours.
 # Run it on the cluster login node with SBATCH_ACCOUNT set.
 set -euo pipefail
@@ -30,6 +32,7 @@ general="$P/general/gsm8k_test.parquet $P/general/mmlu_pro_test.parquet $P/gener
 $P/general/cmmlu_test.parquet $P/law_med/medqa_test.parquet $P/law_med/medmcqa_dev.parquet \
 $P/law_med/cmexam_test.parquet $P/law_med/cail_test.parquet"
 finance="$P/finance/finqa_test.parquet $P/finance/tatqa_dev.parquet"
+tatqa_test=$P/finance/tatqa_test.parquet
 
 cmd="rc=0"
 for M in "$@"; do
@@ -39,6 +42,8 @@ for M in "$@"; do
     h200) cmd+="
 $ev --data $finance --out $R/$M-nothink --thinking false --repeats 2 --max-tokens 4096 || rc=1
 $ev --data $finance --out $R/$M-think --thinking true --repeats 1 --max-tokens 8192 --max-model-len 16384 || rc=1
+$ev --data $tatqa_test --out $R/$M-nothink-tatqa_test --thinking false --repeats 2 --max-tokens 4096 || rc=1
+$ev --data $tatqa_test --out $R/$M-think-tatqa_test --thinking true --repeats 1 --max-tokens 8192 --max-model-len 16384 || rc=1
 $ev --data $P/finance_pool/rl_val512.parquet --out $R/valchk --thinking true --repeats 1 --max-tokens 4096 --max-model-len 8192 || rc=1" ;;
     a100) cmd+="
 python -P -m b2e.eval.bpb --model /tmp/b2e-models/$M --data $D/cpt/m0/heldout --out $R/bpb_$M.json || rc=1
@@ -52,7 +57,7 @@ cmd+="
 exit \$rc"
 
 case $PART in
-  h200) gres=(--gres=gpu:h200:1 --mem=96G) per=25 tag=H ;;
+  h200) gres=(--gres=gpu:h200:1 --mem=96G) per=30 tag=H ;;
   a100) gres=(--gres=gpu:a100:1 --constraint=a100@80g) per=40 tag=A ;;
 esac
 minutes=$((15 + per * $#))

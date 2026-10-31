@@ -5,7 +5,8 @@
 #   A100 80 GB (gpu-short): bpb on the M0 held-out documents, general +
 #     law/medicine, IF, and the SFT val loss of the model and of M0 on the
 #     same rows (`--exclude-train` its own train file, F#47);
-#   H200 (gpu-short): finance without thinking (x2) and with thinking.
+#   H200 (gpu-short): finance without thinking (x2) and with thinking, and
+#     TAT-QA test the same two ways in dirs of their own (F#66).
 # A failed eval does not stop the others in its job; the job then exits 1.
 #   AFTER=<jobid> cluster/submit_eval_s.sh s_law
 # MIX (default mix_<domain>) names the train mix, BASE (default m0) the model
@@ -28,6 +29,7 @@ general="$P/general/gsm8k_test.parquet $P/general/mmlu_pro_test.parquet $P/gener
 $P/general/cmmlu_test.parquet $P/law_med/medqa_test.parquet $P/law_med/medmcqa_dev.parquet \
 $P/law_med/cmexam_test.parquet $P/law_med/cail_test.parquet"
 finance="$P/finance/finqa_test.parquet $P/finance/tatqa_dev.parquet"
+tatqa_test=$P/finance/tatqa_test.parquet
 
 a100="rc=0
 python -P -m b2e.eval.bpb --model /tmp/b2e-models/$M --data $D/cpt/m0/heldout --out $R/bpb_$M.json || rc=1
@@ -39,6 +41,8 @@ exit \$rc"
 h200="rc=0
 $ev --data $finance --out $R/$M-nothink --thinking false --repeats 2 --max-tokens 4096 || rc=1
 $ev --data $finance --out $R/$M-think --thinking true --repeats 1 --max-tokens 8192 --max-model-len 16384 || rc=1
+$ev --data $tatqa_test --out $R/$M-nothink-tatqa_test --thinking false --repeats 2 --max-tokens 4096 || rc=1
+$ev --data $tatqa_test --out $R/$M-think-tatqa_test --thinking true --repeats 1 --max-tokens 8192 --max-model-len 16384 || rc=1
 exit \$rc"
 
 STAGE_MODELS="$M $BASE" sbatch --parsable $dep --partition=gpu-short --gres=gpu:a100:1 --constraint=a100@80g \
