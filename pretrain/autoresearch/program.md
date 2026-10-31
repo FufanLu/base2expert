@@ -19,12 +19,20 @@ propose changes; a script applies them, runs the training and keeps or discards 
 
 ## Each round
 
-You see the current `train.py` (the best version so far) and `results.tsv` (every experiment: commit,
-val_bpb, peak memory in GB, status `keep` / `discard` / `crash` / `invalid`, description). Propose **one**
-experiment: one idea, small enough that its effect can be read from a single 5-minute run.
+You see the current `train.py` (the best version so far) and `results.tsv`: one row per training run
+(commit, val_bpb, peak memory in GB, status, description). Statuses: `keep` (the baseline's first run, or a
+kept change), `noise` (the unchanged baseline trained again, to measure run-to-run noise), `discard`,
+`crash`, `invalid` (the edit could not be applied); and for a change whose first run looked better,
+`screen` (that first run), `confirm` (the change trained again), `recheck` (the best version trained again
+alongside it), then one decision row, `kept` or `rejected`, with the change's mean. Propose **one**
+experiment: one idea, so that its effect can be read from its runs.
 
-The script then commits your change, trains, and keeps it only if val_bpb is lower than the best so far;
-otherwise the file goes back to the best version. A crash gets one repair attempt.
+The script then commits your change and trains it. Two runs of the same code differ (the budget is
+wall-clock, so the number of steps varies), so a change is kept only if it beats the best by more than
+that noise: when its first run is clearly better, it is trained twice more, alternating with the best
+version, and kept only if its mean beats the best's by two standard errors. Otherwise the file goes back
+to the best version. A crash gets one repair attempt. Small effects cannot be told from noise; prefer
+ideas that could move val_bpb by a few thousandths.
 
 ## How to answer
 

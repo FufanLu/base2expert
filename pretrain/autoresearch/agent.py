@@ -28,6 +28,18 @@ by up to 0.0012. --noise-runs trains the unchanged baseline a few more times
 (status `noise`) to measure that spread, and --min-gain keeps a change only
 if it beats the best by more than the spread.
 
+The spread itself differs from node to node (0.00025 on one, 0.0039 on
+another: 11360201, 11378056), so one fixed margin is too strict on a quiet
+node and too loose on a noisy one, and a single run that beats the best can
+be luck. --confirm K replaces step 4: the best is the mean of all its runs; a
+candidate whose first run beats it by --screen-sd run-to-run standard
+deviations (status `screen`) is trained K more times, alternating with the
+best (`confirm`, `recheck`), and is kept only if its mean beats the mean of
+those best runs by two standard errors of the difference, and by at least
+--min-gain (`kept`, else `rejected`; that row carries the candidate's mean).
+The standard deviation is pooled over every commit trained more than once in
+this run. runs.jsonl keeps every run's full summary (steps, MFU, seconds).
+
     python -P pretrain/autoresearch/agent.py --repo $AR/repo --python $NC_ENV/bin/python \\
         --proposer llm --llm-url http://127.0.0.1:8000 --llm-model qwen3.6 --rounds 15
 """
@@ -36,6 +48,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import random
 import re
 import subprocess
@@ -129,6 +142,44 @@ def random_propose(rng: random.Random, source: str, tried: set[str]) -> str | No
     return f"DESCRIPTION: {desc}\n{block}"
 
 
+# --- the keep rule of --confirm ---------------------------------------------
+
+# results.tsv statuses that are one training run each; `kept` / `rejected` rows
+# are --confirm's decisions and carry the candidate's mean.
+RUN_STATUSES = ("keep", "noise", "discard", "screen", "confirm", "recheck")
+# statuses that end a round (or are the baseline's runs), so resuming counts rounds
+ROUND_STATUSES = ("keep", "noise", "discard", "crash", "invalid", "kept", "rejected")
+
+
+def mean(xs: list[float]) -> float:
+    return sum(xs) / len(xs) if xs else float("inf")
+
+
+def runs_by_commit(tsv_text: str) -> dict[str, list[float]]:
+    out: dict[str, list[float]] = {}
+    for row in tsv_text.splitlines()[1:]:
+        f = row.split("\t")
+        if f[3] in RUN_STATUSES and float(f[1]) > 0:
+            out.setdefault(f[0], []).append(float(f[1]))
+    return out
+
+
+def pooled_sd(groups: dict[str, list[float]]) -> float | None:
+    """Run-to-run standard deviation of val_bpb, pooled over the commits trained more than once."""
+    ss = dof = 0.0
+    for v in groups.values():
+        if len(v) > 1:
+            m = mean(v)
+            ss += sum((x - m) ** 2 for x in v)
+            dof += len(v) - 1
+    return math.sqrt(ss / dof) if dof else None
+
+
+def keep_margin(sd: float | None, n_cand: int, n_best: int, min_gain: float) -> float:
+    """How far below the best's mean a candidate's mean must be: two standard errors, and min_gain at least."""
+    return max(min_gain, 2 * sd * math.sqrt(1 / n_cand + 1 / n_best)) if sd else min_gain
+
+
 # --- loop -------------------------------------------------------------------
 
 def main() -> None:
@@ -147,6 +198,9 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--noise-runs", type=int, default=0, help="extra runs of the unchanged baseline (new run only)")
     ap.add_argument("--min-gain", type=float, default=0.0, help="keep only if val_bpb < best - min_gain")
+    ap.add_argument("--confirm", type=int, default=0, help="re-runs of a candidate that passes the screen (0: one run)")
+    ap.add_argument("--screen-sd", type=float, default=1.0,
+                    help="with --confirm: standard deviations below the best's mean the first run must be")
     args = ap.parse_args()
 
     repo, rng, t0 = args.repo, random.Random(args.seed), time.time()
@@ -155,16 +209,22 @@ def main() -> None:
     if not tsv.exists():
         tsv.write_text(HEADER)
     program = args.program.read_text()
-    done = len(tsv.read_text().splitlines()) - 1
+    done = sum(1 for r in tsv.read_text().splitlines()[1:] if r.split("\t")[3] in ROUND_STATUSES)
 
     def record(commit: str, s: dict, status: str, desc: str) -> None:
         with tsv.open("a") as f:
             f.write(f"{commit}\t{s.get('val_bpb', 0.0):.6f}\t{s.get('peak_vram_mb', 0.0) / 1024:.1f}\t{status}\t"
                     f"{desc.replace(chr(9), ' ')}\n")
+        with (repo / "runs.jsonl").open("a") as f:
+            f.write(json.dumps({"commit": commit, "status": status, "description": desc, **s}) + "\n")
+
+    def best_mean(commit: str) -> float:
+        return mean(runs_by_commit(tsv.read_text()).get(commit, []))
 
     best_commit = git(repo, "rev-parse", "--short=7", "HEAD")
-    best = min((float(r.split("\t")[1]) for r in tsv.read_text().splitlines()[1:]
-                if r.split("\t")[3] == "keep"), default=float("inf"))
+    best = best_mean(best_commit) if args.confirm else min(
+        (float(r.split("\t")[1]) for r in tsv.read_text().splitlines()[1:] if r.split("\t")[3] == "keep"),
+        default=float("inf"))
     if done == 0:
         s, tail = run_train(repo, args.python, args.timeout)
         if "val_bpb" not in s:
@@ -177,6 +237,8 @@ def main() -> None:
             record(best_commit, s, "noise", f"baseline repeat {i + 1}")
             done += 1
             print(f"baseline repeat {i + 1}: val_bpb {s.get('val_bpb', 0):.6f}", flush=True)
+        if args.confirm:
+            best = best_mean(best_commit)
     tried = {r.split("\t")[4] for r in tsv.read_text().splitlines()[1:]}
 
     note = ""
@@ -216,21 +278,49 @@ def main() -> None:
                 s, tail = run_train(repo, args.python, args.timeout)
             except EditError:
                 pass
+        row_desc = desc
+        sd = pooled_sd(runs_by_commit(tsv.read_text()))
         if "val_bpb" not in s:
             status = "crash"
-        elif s["val_bpb"] < best - args.min_gain:
-            status = "keep"
-        else:
+        elif not args.confirm:
+            status = "keep" if s["val_bpb"] < best - args.min_gain else "discard"
+        elif s["val_bpb"] >= best - args.screen_sd * (sd or 0.0):
             status = "discard"
-        record(commit, s, status, desc)
+        else:  # the screen passed: train the candidate and the best alternately
+            record(commit, s, "screen", desc)
+            cand, base = [s["val_bpb"]], []
+            for _ in range(args.confirm):
+                for c, vals, st, d in ((best_commit, base, "recheck", f"best again, alongside: {desc}"),
+                                       (commit, cand, "confirm", desc)):
+                    git(repo, "checkout", "-q", c, "--", "train.py")
+                    r, tail = run_train(repo, args.python, args.timeout)
+                    record(c, r, st, d)
+                    if "val_bpb" in r:
+                        vals.append(r["val_bpb"])
+            sd = pooled_sd(runs_by_commit(tsv.read_text()))
+            margin = keep_margin(sd, len(cand), len(base), args.min_gain)
+            complete = len(cand) == args.confirm + 1 and len(base) == args.confirm
+            status = "kept" if complete and mean(cand) < mean(base) - margin else "rejected"
+            row_desc = (f"{desc} | mean of {len(cand)} runs vs {mean(base):.6f} for the best over {len(base)} runs "
+                        f"alongside; margin {margin:.6f}")
+            exchange["confirm"] = {"candidate": cand, "best": base, "sd": sd, "margin": margin}
+            s = {"val_bpb": mean(cand), "peak_vram_mb": s.get("peak_vram_mb", 0.0)}
+        record(commit, s, status, row_desc)
         tried.add(desc)
         exchange.update({"description": desc, "commit": commit, "summary": s, "status": status,
                          "diff": git(repo, "diff", f"{best_commit}..{commit}", "--", "train.py")})
-        if status == "keep":
-            best, best_commit = s["val_bpb"], commit
+        if status in ("keep", "kept"):
+            best_commit = commit
         else:
             git(repo, "reset", "-q", "--hard", best_commit)
-        note = f"The last experiment ({desc}) ended as {status}" + (f": {tail[-800:]}" if status == "crash" else ".") + "\n\n"
+        if args.confirm:
+            best = best_mean(best_commit)
+        elif status == "keep":
+            best = s["val_bpb"]
+        note = f"The last experiment ({desc}) ended as {status}" + (f": {tail[-800:]}" if status == "crash" else ".")
+        if status in ("kept", "rejected"):
+            note += f" Its first run beat the best, so it was trained again alternating with the best: {row_desc}."
+        note += "\n\n"
         (rounds_dir / f"{done:03d}.json").write_text(json.dumps(exchange, indent=1))
         print(f"round {done}: {status} {s.get('val_bpb', 0):.6f} (best {best:.6f}) {desc}", flush=True)
         done += 1

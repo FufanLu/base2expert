@@ -15,7 +15,12 @@
 # continues it (results.tsv says how many rounds are done).
 # NOISE_RUNS (new run only) repeats the unchanged baseline to measure run-to-run
 # spread; MIN_GAIN is the margin a change must beat the best by to be kept.
+# CONFIRM=2 re-runs a change whose first run beats the best by SCREEN_SD standard
+# deviations twice, alternating with the best, before keeping it (agent.py).
+# HOURS=1.3 leaves 42 minutes, enough for a round started at 1.3 h to finish
+# its 5 runs.
 #   TAG=oct25-llm PROPOSER=llm ROUNDS=40 NOISE_RUNS=2 MIN_GAIN=0.002 sbatch cluster/autoresearch.sbatch
+#   TAG=oct31-llm PROPOSER=llm NOISE_RUNS=2 CONFIRM=2 MIN_GAIN=0.001 sbatch cluster/autoresearch.sbatch
 set -euo pipefail
 source "${B2E_CODE:-/scratch/$USER/b2e/code}/cluster/common.sh"
 TAG=${TAG:?run tag}; PROPOSER=${PROPOSER:-llm}; ROUNDS=${ROUNDS:-40}
@@ -56,5 +61,6 @@ if [ "$PROPOSER" = llm ]; then
 fi
 "$TR_PY" -P "$CODE/pretrain/autoresearch/agent.py" --repo "$RUN" --python "$NC_PY" --proposer "$PROPOSER" \
   ${URL:+--llm-url "$URL"} --rounds "$ROUNDS" --hours "$HOURS" --seed "${SEED:-0}" \
-  --noise-runs "${NOISE_RUNS:-0}" --min-gain "${MIN_GAIN:-0}" 2>&1 | tee -a "$LOGS/ar_$TAG.log"
-log "stretch done: $(($(wc -l <"$RUN/results.tsv") - 1)) rounds in results.tsv"
+  --noise-runs "${NOISE_RUNS:-0}" --min-gain "${MIN_GAIN:-0}" --confirm "${CONFIRM:-0}" \
+  --screen-sd "${SCREEN_SD:-1}" 2>&1 | tee -a "$LOGS/ar_$TAG.log"
+log "stretch done: $(($(wc -l <"$RUN/results.tsv") - 1)) rows in results.tsv"
