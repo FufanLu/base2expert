@@ -12,7 +12,12 @@ TAT-QA span and multi-span questions are left out of the RL pool: their
 answers are copied phrases, checked by string overlap rather than a
 verifier, so they go to SFT only.
 
+TAT-QA's test split is read from tatqa_dataset_test_gold.json, the version
+with answers. Its dev split is the TAT-QA half of the RL val set, so the
+TAT-QA eval is test (F#66: dev was used for both until 10-31).
+
     python -P -m b2e.data.finance --finqa DIR --tatqa DIR --out DIR
+    python -P -m b2e.data.finance --finqa DIR --tatqa DIR --out DIR --only tatqa_test
 """
 
 from __future__ import annotations
@@ -79,23 +84,31 @@ def tatqa_rows(path: Path, split: str) -> list[dict]:
     return out
 
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--finqa", type=Path, required=True)
     ap.add_argument("--tatqa", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
-    args = ap.parse_args()
+    ap.add_argument("--only", nargs="+", help="write only these sets; the other files in --out stay as they are")
+    args = ap.parse_args(argv)
     import pandas as pd
 
-    args.out.mkdir(parents=True, exist_ok=True)
     sets = {
-        "finqa_train": finqa_rows(args.finqa / "train.json", "train"),
-        "finqa_dev": finqa_rows(args.finqa / "dev.json", "dev"),
-        "finqa_test": finqa_rows(args.finqa / "test.json", "test"),
-        "tatqa_train": tatqa_rows(args.tatqa / "tatqa_dataset_train.json", "train"),
-        "tatqa_dev": tatqa_rows(args.tatqa / "tatqa_dataset_dev.json", "dev"),
+        "finqa_train": lambda: finqa_rows(args.finqa / "train.json", "train"),
+        "finqa_dev": lambda: finqa_rows(args.finqa / "dev.json", "dev"),
+        "finqa_test": lambda: finqa_rows(args.finqa / "test.json", "test"),
+        "tatqa_train": lambda: tatqa_rows(args.tatqa / "tatqa_dataset_train.json", "train"),
+        "tatqa_dev": lambda: tatqa_rows(args.tatqa / "tatqa_dataset_dev.json", "dev"),
+        "tatqa_test": lambda: tatqa_rows(args.tatqa / "tatqa_dataset_test_gold.json", "test"),
     }
-    for name, rows in sets.items():
+    unknown = sorted(set(args.only or []) - set(sets))
+    if unknown:
+        raise SystemExit(f"--only: no set named {unknown}; the sets are {sorted(sets)}")
+    args.out.mkdir(parents=True, exist_ok=True)
+    for name, make in sets.items():
+        if args.only and name not in args.only:
+            continue
+        rows = make()
         pd.DataFrame(rows).to_parquet(args.out / f"{name}.parquet", index=False)
         print(name, len(rows))
 
