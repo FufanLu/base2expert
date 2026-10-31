@@ -68,3 +68,17 @@ def test_exclude_leaves_out_the_items_of_other_answer_files(tmp_path, capsys):
     assert out["finqa_test"][:5] == ["4", "0", "0.5000", "0.7500", "+0.2500"]  # FinQA's id "0" is another item
     assert out["tatqa_dev"][:5] == ["1", "0", "1.0000", "1.0000", "+0.0000"]
     assert out["pooled"][0] == "5"
+
+
+def test_a_model_s_sets_may_come_from_several_dirs(tmp_path, capsys):
+    a = results(tmp_path / "a", True, {"finqa_test": answers([1, 0])})
+    a2 = results(tmp_path / "a2", True, {"tatqa_test": answers([0, 0])})
+    b = results(tmp_path / "b", True, {"finqa_test": answers([1, 1])})
+    b2 = results(tmp_path / "b2", True, {"tatqa_test": answers([1, 0])})
+    main([f"{a},{a2}", f"{b},{b2}", "--sets", "finqa_test", "tatqa_test"])
+    out = {w[0]: w[1:] for w in map(str.split, capsys.readouterr().out.splitlines())}
+    assert out["finqa_test"][:5] == ["2", "0", "0.5000", "1.0000", "+0.5000"]
+    assert out["tatqa_test"][:5] == ["2", "0", "0.0000", "0.5000", "+0.5000"]
+    assert out["pooled"][:5] == ["4", "0", "0.2500", "0.7500", "+0.5000"]
+    with pytest.raises(SystemExit, match="in both"):
+        main([f"{a},{a}", str(b)])

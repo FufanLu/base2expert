@@ -20,6 +20,14 @@ TAT-QA dev items (F#66):
 
     python3 -I tools/paired_cmp.py A B --exclude $B2E_ROOT/results/grpo_fin_step90/valchk/rl_val512.run0.jsonl
 
+A model's sets may sit in several result dirs, given comma-separated and read
+as one: run_eval rewrites the summary.json of its --out, so a set evaluated
+later has a dir of its own (TAT-QA test in <model>-think-tatqa_test):
+
+    python3 -I tools/paired_cmp.py $R/s_fin/s_fin-think,$R/s_fin/s_fin-think-tatqa_test \\
+        $R/dapo_fin_step90/dapo_fin_step90-think,$R/dapo_fin_step90/dapo_fin_step90-think-tatqa_test \\
+        --sets finqa_test tatqa_test
+
 Runs on the login node's system Python (3.9, standard library only).
 """
 
@@ -79,32 +87,49 @@ def row(name: str, c: dict) -> str:
             f" {c['a_higher']:5} {c['b_higher']:5}")
 
 
+def sets_of(dirs: str, run: int) -> dict[str, tuple[Path, bool]]:
+    """{set name: (result dir, thinking)} over comma-separated result dirs; a set may be in one of them only."""
+    out: dict[str, tuple[Path, bool]] = {}
+    suffix = f".run{run}.jsonl"
+    for d in map(Path, dirs.split(",")):
+        thinking = thinking_of(d)
+        for p in sorted(d.glob("*" + suffix)):
+            name = p.name[: -len(suffix)]
+            if name in out:
+                sys.exit(f"{name}{suffix} is in both {out[name][0]} and {d}")
+            out[name] = (d, thinking)
+    return out
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("a", type=Path, help="result dir of model A (a run_eval --out)")
-    ap.add_argument("b", type=Path, help="result dir of model B")
+    ap.add_argument("a", help="result dir of model A (a run_eval --out), or several, comma-separated")
+    ap.add_argument("b", help="result dir(s) of model B")
     ap.add_argument("--run", type=int, default=0)
     ap.add_argument("--sets", nargs="+", help="set names (default: every set of A's run that B also has)")
     ap.add_argument("--exclude", nargs="+", type=Path, default=[],
                     help="run_eval answer files (.jsonl): their (data_source, id) items are left out")
     args = ap.parse_args(argv)
-    think = {d: thinking_of(d) for d in (args.a, args.b)}
-    for label, d in (("A", args.a), ("B", args.b)):
-        print(f"{label}: {d} (thinking {str(think[d]).lower()}, run {args.run})")
+    sides = {"A": sets_of(args.a, args.run), "B": sets_of(args.b, args.run)}
+    for label, dirs in (("A", args.a), ("B", args.b)):
+        modes = sorted({str(t).lower() for _, t in sides[label].values()}) or ["?"]
+        print(f"{label}: {dirs} (thinking {'/'.join(modes)}, run {args.run})")
     drop = keys_of(args.exclude)
     if drop:
         print(f"excluding the {len(drop)} items of {', '.join(str(p) for p in args.exclude)}")
-    suffix = f".run{args.run}.jsonl"
-    names = args.sets or sorted(p.name[: -len(suffix)] for p in args.a.glob("*" + suffix))
+    names = args.sets or sorted(sides["A"])
     print(f"{'set':14} {'n':>5} {'unpaired':>8} {'A':>7} {'B':>7} {'B-A':>7} {'se':>6} {'A>B':>5} {'B>A':>5}")
     pooled_a: dict = {}
     pooled_b: dict = {}
     for name in names:
-        a, b = load(args.a, name, args.run, think[args.a]), load(args.b, name, args.run, think[args.b])
-        if a is None or b is None:
+        missing = [label for label in ("A", "B") if name not in sides[label]]
+        if missing:
             if args.sets:
-                sys.exit(f"no {name}{suffix} in {args.a if a is None else args.b}")
+                sys.exit(f"no {name}.run{args.run}.jsonl in {args.a if missing[0] == 'A' else args.b}")
             continue
+        (da, ta), (db, tb) = sides["A"][name], sides["B"][name]
+        a, b = load(da, name, args.run, ta), load(db, name, args.run, tb)
+        assert a is not None and b is not None  # sets_of found both files
         a = {k: v for k, v in a.items() if k not in drop}
         b = {k: v for k, v in b.items() if k not in drop}
         print(row(name, compare(a, b)))
