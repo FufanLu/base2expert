@@ -187,6 +187,8 @@ def main() -> None:
     ap.add_argument("--temperature", type=float, default=1.0)
     ap.add_argument("--max-tokens", type=int, default=4096)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--thinking", action=argparse.BooleanOptionalAction, default=True,
+                    help="sample with the thinking block open (--no-thinking: write the problem directly)")
     args = ap.parse_args()
 
     import pandas as pd
@@ -196,7 +198,7 @@ def main() -> None:
     msgs = [proposer_messages(rng) for _ in range(args.n)]
     llm = LLM(model=args.model, gpu_memory_utilization=0.85, max_model_len=8192, enable_prefix_caching=True)
     outs = llm.chat(msgs, SamplingParams(temperature=args.temperature, max_tokens=args.max_tokens, seed=args.seed),
-                    chat_template_kwargs={"enable_thinking": True})
+                    chat_template_kwargs={"enable_thinking": args.thinking})
     index = None
     if args.decontam_index:
         from b2e.data.decontam import ItemNgramIndex
@@ -204,14 +206,15 @@ def main() -> None:
         index = ItemNgramIndex(args.decontam_index)
     texts = [o.outputs[0].text for o in outs]
     outcomes: list[str] = []
-    rows, stats = filter_problems(texts, args.round, index, thinking=True, outcomes=outcomes)
+    rows, stats = filter_problems(texts, args.round, index, thinking=args.thinking, outcomes=outcomes)
     args.out.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(rows).to_parquet(args.out / "problems.parquet", index=False)
     # every proposal with its outcome, to read why problems fail
     tokens = [len(o.outputs[0].token_ids) for o in outs]
     pd.DataFrame({"prompt": [m[0]["content"].split("\n\n")[1] for m in msgs], "text": texts,
                   "outcome": outcomes, "tokens": tokens}).to_parquet(args.out / "proposals.parquet", index=False)
-    summary = {"round": args.round, "proposed": args.n, **dict(stats), "mean_tokens": round(sum(tokens) / len(tokens)),
+    summary = {"round": args.round, "thinking": args.thinking, "proposed": args.n, **dict(stats),
+               "mean_tokens": round(sum(tokens) / len(tokens)),
                "cut_at_max_tokens": sum(o.outputs[0].finish_reason == "length" for o in outs)}
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary))
