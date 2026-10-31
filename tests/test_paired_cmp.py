@@ -55,3 +55,16 @@ def test_items_in_one_dir_only_are_left_out_and_counted():
     assert (c["n"], c["unpaired"], c["a"], c["b"], c["diff"]) == (2, 2, 0.5, 1.0, 0.5)
     with pytest.raises(ValueError, match="no item"):
         compare({("finqa", "0"): 1.0}, {("tatqa", "0"): 1.0})
+
+
+def test_exclude_leaves_out_the_items_of_other_answer_files(tmp_path, capsys):
+    a = results(tmp_path / "a", True, {"finqa_test": answers([1, 0, 1, 0]), "tatqa_dev": answers([1, 1])})
+    b = results(tmp_path / "b", True, {"finqa_test": answers([1, 1, 1, 0]), "tatqa_dev": answers([0, 1])})
+    val = tmp_path / "rl_val512.run0.jsonl"
+    val.write_text(json.dumps({"data_source": "tatqa", "id": "0", "score": 1.0, "response": "x"}) + "\n")
+    main([str(a), str(b), "--exclude", str(val)])
+    out = {w[0]: w[1:] for w in map(str.split, capsys.readouterr().out.splitlines())
+           if w[0] in ("finqa_test", "tatqa_dev", "pooled")}
+    assert out["finqa_test"][:5] == ["4", "0", "0.5000", "0.7500", "+0.2500"]  # FinQA's id "0" is another item
+    assert out["tatqa_dev"][:5] == ["1", "0", "1.0000", "1.0000", "+0.0000"]
+    assert out["pooled"][0] == "5"

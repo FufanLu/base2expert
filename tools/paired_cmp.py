@@ -14,8 +14,13 @@ score with thinking.
 An answer that opened a thinking block (always, in a dir run with thinking, as
 its summary.json says) and never closed it scores 0, as compute_score does
 since F#53, so dirs scored before that rule compare the same way. Items only
-one dir has are left out and counted in "unpaired". Runs on the login node's
-system Python (3.9, standard library only).
+one dir has are left out and counted in "unpaired". --exclude leaves out the
+items of other answer files too, e.g. the 512 RL val rows, 233 of which are
+TAT-QA dev items (F#66):
+
+    python3 -I tools/paired_cmp.py A B --exclude $B2E_ROOT/results/grpo_fin_step90/valchk/rl_val512.run0.jsonl
+
+Runs on the login node's system Python (3.9, standard library only).
 """
 
 from __future__ import annotations
@@ -46,6 +51,15 @@ def load(d: Path, name: str, run: int, thinking: bool) -> dict[tuple[str, str], 
     return out
 
 
+def keys_of(paths: list[Path]) -> set[tuple[str, str]]:
+    """(data_source, id) of every answer in these run_eval answer files."""
+    out = set()
+    for p in paths:
+        with open(p) as f:
+            out |= {(r["data_source"], r["id"]) for r in map(json.loads, f)}
+    return out
+
+
 def compare(a: dict, b: dict) -> dict:
     """Means over the items both have, the mean of B - A and its standard error."""
     ids = sorted(set(a) & set(b))
@@ -71,10 +85,15 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("b", type=Path, help="result dir of model B")
     ap.add_argument("--run", type=int, default=0)
     ap.add_argument("--sets", nargs="+", help="set names (default: every set of A's run that B also has)")
+    ap.add_argument("--exclude", nargs="+", type=Path, default=[],
+                    help="run_eval answer files (.jsonl): their (data_source, id) items are left out")
     args = ap.parse_args(argv)
     think = {d: thinking_of(d) for d in (args.a, args.b)}
     for label, d in (("A", args.a), ("B", args.b)):
         print(f"{label}: {d} (thinking {str(think[d]).lower()}, run {args.run})")
+    drop = keys_of(args.exclude)
+    if drop:
+        print(f"excluding the {len(drop)} items of {', '.join(str(p) for p in args.exclude)}")
     suffix = f".run{args.run}.jsonl"
     names = args.sets or sorted(p.name[: -len(suffix)] for p in args.a.glob("*" + suffix))
     print(f"{'set':14} {'n':>5} {'unpaired':>8} {'A':>7} {'B':>7} {'B-A':>7} {'se':>6} {'A>B':>5} {'B>A':>5}")
@@ -86,6 +105,8 @@ def main(argv: list[str] | None = None) -> None:
             if args.sets:
                 sys.exit(f"no {name}{suffix} in {args.a if a is None else args.b}")
             continue
+        a = {k: v for k, v in a.items() if k not in drop}
+        b = {k: v for k, v in b.items() if k not in drop}
         print(row(name, compare(a, b)))
         pooled_a.update({(name, *k): v for k, v in a.items()})
         pooled_b.update({(name, *k): v for k, v in b.items()})
