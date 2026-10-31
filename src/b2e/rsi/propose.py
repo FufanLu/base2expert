@@ -131,35 +131,49 @@ def to_row(prob: dict, value: float, round_idx: int, idx: int) -> dict:
     }
 
 
-def filter_problems(texts: list[str], round_idx: int, index=None, seen: list[set[str]] | None = None
-                    ) -> tuple[list[dict], Counter]:
-    """Rows for the problems that pass every check, and the count of each failure."""
+def filter_problems(texts: list[str], round_idx: int, index=None, seen: list[set[str]] | None = None,
+                    thinking: bool = False, outcomes: list[str] | None = None) -> tuple[list[dict], Counter]:
+    """Rows for the problems that pass every check, and the count of each failure.
+
+    thinking: the texts were sampled with the thinking block open, so one
+    without </think> was cut off inside it, and any blocks in it are drafts
+    (the same rule as the reward's, F#53). outcomes, if given, gets each
+    text's result ("kept" or the failed check) in order."""
     stats: Counter = Counter()
     seen = [] if seen is None else seen
     rows: list[dict] = []
+
+    def note(kind: str) -> None:
+        stats[kind] += 1
+        if outcomes is not None:
+            outcomes.append(kind)
+
     for text in texts:
+        if thinking and "</think>" not in text:
+            note("unclosed")
+            continue
         prob = parse(text)
         if prob is None:
-            stats["parse"] += 1
+            note("parse")
             continue
         res = run(prob["program"])
         if not res.ok:
-            stats["program:" + res.error.split(":")[0]] += 1
+            note("program:" + res.error.split(":")[0])
             continue
         if not grounded(prob["program"], prob["context"]):
-            stats["ungrounded"] += 1
+            note("ungrounded")
             continue
         sh = shingles(prob["question"] + " " + prob["context"])
         if any(len(sh & s) / max(1, len(sh | s)) >= 0.8 for s in seen):
-            stats["duplicate"] += 1
+            note("duplicate")
             continue
         if index is not None and index.contaminated(prob["context"] + "\n" + prob["question"]):
-            stats["eval_overlap"] += 1
+            note("eval_overlap")
             continue
         seen.append(sh)
         assert res.value is not None
         rows.append(to_row(prob, res.value, round_idx, len(rows)))
-        stats["kept"] += 1
+        note("kept")
     return rows, stats
 
 
@@ -188,10 +202,17 @@ def main() -> None:
         from b2e.data.decontam import ItemNgramIndex
 
         index = ItemNgramIndex(args.decontam_index)
-    rows, stats = filter_problems([o.outputs[0].text for o in outs], args.round, index)
+    texts = [o.outputs[0].text for o in outs]
+    outcomes: list[str] = []
+    rows, stats = filter_problems(texts, args.round, index, thinking=True, outcomes=outcomes)
     args.out.mkdir(parents=True, exist_ok=True)
     pd.DataFrame(rows).to_parquet(args.out / "problems.parquet", index=False)
-    summary = {"round": args.round, "proposed": args.n, **dict(stats)}
+    # every proposal with its outcome, to read why problems fail
+    tokens = [len(o.outputs[0].token_ids) for o in outs]
+    pd.DataFrame({"prompt": [m[0]["content"].split("\n\n")[1] for m in msgs], "text": texts,
+                  "outcome": outcomes, "tokens": tokens}).to_parquet(args.out / "proposals.parquet", index=False)
+    summary = {"round": args.round, "proposed": args.n, **dict(stats), "mean_tokens": round(sum(tokens) / len(tokens)),
+               "cut_at_max_tokens": sum(o.outputs[0].finish_reason == "length" for o in outs)}
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary))
 

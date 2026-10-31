@@ -31,3 +31,9 @@ def test_failures_are_counted_by_kind():
 def test_parse_strips_code_fences():
     p = parse(EXAMPLE.replace("<program>\n", "<program>\n```python\n").replace("\n</program>", "\n```\n</program>"))
     assert p is not None and not p["program"].startswith("```")
+
+
+def test_a_proposal_cut_off_inside_its_thinking_is_not_kept():
+    cut = "<think>a draft:\n" + EXAMPLE + "\nbut let me check the margin again"  # no </think>: hit the limit
+    rows, stats = filter_problems([cut, "<think>plan</think>\n" + EXAMPLE], round_idx=1, thinking=True)
+    assert stats == {"unclosed": 1, "kept": 1} and len(rows) == 1
