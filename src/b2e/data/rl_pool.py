@@ -13,6 +13,12 @@ policy k times per prompt beforehand (b2e.data.synth with --temperature 1.0
         --out $B2E_ROOT/data/processed/finance_pool --train finqa_train.parquet tatqa_train.parquet \\
         --val finqa_dev.parquet tatqa_dev.parquet
 
+The pass rate counts samples at score 1, so a graded reward (CAIL term gives
+0.2-0.8 for a near miss) can leave a group with no sample at 1 and still unequal
+scores. --unequal keeps the prompts whose k scores are not all equal instead,
+which is the condition for a nonzero advantage and, for a 0/1 reward, the same
+prompts as the pass-rate range (P7 pools; docs/runs.md, 11-01).
+
 The train files are a named option: as a positional list after `--val`, they
 were taken as more val files and the run stopped with "the following arguments
 are required: train" (F#48).
@@ -27,9 +33,18 @@ from pathlib import Path
 import pandas as pd
 
 
-def select(pool: pd.DataFrame, rates: pd.DataFrame, low: float, high: float) -> pd.DataFrame:
-    """Rows of pool whose (data_source, id) has a pass rate in [low, high]."""
-    keep = rates[(rates["pass_rate"] >= low) & (rates["pass_rate"] <= high)]
+def select(pool: pd.DataFrame, rates: pd.DataFrame, low: float, high: float, unequal: bool = False) -> pd.DataFrame:
+    """Rows of pool whose (data_source, id) has a pass rate in [low, high].
+
+    With unequal, the rows whose k scores are not all equal instead: the condition for a
+    nonzero group advantage. For a 0/1 reward these are the prompts with a pass rate in
+    [1/k, 1 - 1/k], [0.1, 0.9] at k = 8; a graded reward keeps more (CAIL term in the P7
+    pilot, 11527721: 232 of 300 prompts against 147 by the pass rate at score 1).
+    """
+    if unequal:
+        keep = rates[rates["scores"].map(lambda s: max(s) > min(s))]
+    else:
+        keep = rates[(rates["pass_rate"] >= low) & (rates["pass_rate"] <= high)]
     keys = set(zip(keep["data_source"], keep["id"], strict=True))
     mask = [(ds, e["id"]) in keys for ds, e in zip(pool["data_source"], pool["extra_info"], strict=True)]
     return pool[mask]
@@ -40,6 +55,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--passrate", required=True, help="b2e.data.synth *_passrate.parquet of the starting policy")
     ap.add_argument("--low", type=float, default=0.1)
     ap.add_argument("--high", type=float, default=0.9)
+    ap.add_argument("--unequal", action="store_true",
+                    help="keep prompts whose k scores are not all equal instead of --low/--high (P7: graded rewards)")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--val", nargs="+", required=True, help="validation parquet files, listed as they are")
     ap.add_argument("--train", nargs="+", required=True, help="train parquet files to select from")
@@ -51,11 +68,12 @@ def main() -> None:
 
     rates = pd.read_parquet(args.passrate)
     args.out.mkdir(parents=True, exist_ok=True)
-    summary: dict = {"passrate": args.passrate, "low": args.low, "high": args.high, "sources": {}}
+    rule = {"unequal": True} if args.unequal else {"low": args.low, "high": args.high}
+    summary: dict = {"passrate": args.passrate, **rule, "sources": {}}
     listed = []
     for f in args.train:
         pool = pd.read_parquet(f)
-        kept = select(pool, rates, args.low, args.high)
+        kept = select(pool, rates, args.low, args.high, args.unequal)
         dst = args.out / (Path(f).stem + "_pool.parquet")
         kept.to_parquet(dst, index=False)
         listed.append(str(dst))
