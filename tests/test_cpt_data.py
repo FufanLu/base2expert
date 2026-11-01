@@ -68,6 +68,26 @@ def test_synth_keeps_the_shortest_verified_finished_answer():
     assert rows[1]["messages"][-1]["content"] == "\\boxed{5}"
 
 
+def test_synth_draws_named_sources_at_their_own_sizes():
+    import pandas as pd
+    import pytest
+
+    from b2e.data.synth import draw, parse_sizes
+
+    df = pd.DataFrame({"data_source": ["a"] * 5 + ["b"] * 5, "x": range(10)})
+
+    def sizes_of(frames):
+        return {g["data_source"].iloc[0]: len(g) for g in frames}
+
+    assert sizes_of(draw(df, 2, parse_sizes(["b=4"]), 0)) == {"a": 2, "b": 4}
+    assert sizes_of(draw(df, 2, {"b": 99}, 0)) == {"a": 2, "b": 5}
+    # without --source-n, the draw every earlier run made
+    old = [g.sample(n=min(2, len(g)), random_state=0) for _, g in df.groupby("data_source")]
+    assert all(x.equals(y) for x, y in zip(draw(df, 2, {}, 0), old, strict=True))
+    for bad in ("b:4", "=4", "b=", "b=x"):
+        with pytest.raises(SystemExit):
+            parse_sizes([bad])
+
 def test_a_data_dir_contributes_its_top_level_parquet_only(tmp_path):
     import pandas as pd
 

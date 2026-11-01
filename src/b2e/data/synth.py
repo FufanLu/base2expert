@@ -18,7 +18,8 @@ Every sample's full text goes to <stem>_parts/samples_*.parquet, so a
 verifier fix is applied by scoring again on a CPU, not by sampling again
 (F#32 had to be sampled again: the IF run kept only the passing texts).
 --only-ids restricts the run to listed prompts, e.g. the ones a first pass
-never solved.
+never solved. --source-n sets the number drawn for named sources, where
+their kept shares differ (P7 pools: CAIL charges keeps 18 %, term 77 %).
 
     python -P -m b2e.data.synth --teacher /tmp/b2e-models/Qwen3.6-35B-A3B --k 4 \\
         --per-source 2000 --out sft_fin.parquet finqa_train.parquet tatqa_train.parquet
@@ -47,6 +48,22 @@ def split_thinking(text: str) -> tuple[str, str]:
         return "", text.strip()
     reasoning, answer = text.split("</think>", 1)
     return reasoning.replace("<think>", "").strip(), answer.strip()
+
+
+def parse_sizes(items: list[str]) -> dict[str, int]:
+    """{source: n} from SOURCE=N items (--source-n)."""
+    sizes = {}
+    for item in items:
+        source, sep, n = item.partition("=")
+        if not sep or not source or not n.isdigit():
+            raise SystemExit(f"--source-n wants SOURCE=N, got {item!r}")
+        sizes[source] = int(n)
+    return sizes
+
+
+def draw(df: pd.DataFrame, per_source: int, sizes: dict[str, int], seed: int) -> list[pd.DataFrame]:
+    """Per data_source, a seeded sample of sizes.get(source, per_source) rows (all of them if fewer)."""
+    return [g.sample(n=min(sizes.get(ds, per_source), len(g)), random_state=seed) for ds, g in df.groupby("data_source")]
 
 
 def score_prompt(row, outputs, min_score: float) -> tuple[dict, list[dict]]:
@@ -93,18 +110,22 @@ def main() -> None:
     ap.add_argument("--out", required=True)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--only-ids", default="", help="text file, one prompt id per line: run on these prompts only")
+    ap.add_argument("--source-n", nargs="+", default=[], metavar="SOURCE=N",
+                    help="prompts drawn for these sources instead of --per-source, e.g. cail2018_term=3000")
     ap.add_argument("inputs", nargs="+")
     args = ap.parse_args()
 
     only = set(Path(args.only_ids).read_text().split("\n")) - {""} if args.only_ids else None
+    sizes = parse_sizes(args.source_n)
     frames = []
     for path in args.inputs:
         df = pd.read_parquet(path)
         if only is not None:
             df = df[df["extra_info"].apply(lambda e: e["id"] in only)]
-        for _, g in df.groupby("data_source"):
-            frames.append(g.sample(n=min(args.per_source, len(g)), random_state=args.seed))
+        frames.extend(draw(df, args.per_source, sizes, args.seed))
     df = pd.concat(frames, ignore_index=True)
+    if missing := set(sizes) - set(df["data_source"]):  # a misspelt source would silently get --per-source
+        raise SystemExit(f"--source-n names sources not in the inputs: {sorted(missing)}")
     key = pd.DataFrame({"s": df["data_source"], "i": df["extra_info"].apply(lambda e: e["id"])})
     if key.duplicated().any():  # pass rates, SFT pairs and --only-ids all identify a prompt by (source, id)
         raise SystemExit(f"duplicate prompt ids: {key[key.duplicated()].head().values.tolist()}")
