@@ -28,23 +28,55 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Sequence
 from pathlib import Path
 
 import pandas as pd
 
+from b2e.reward.numeric import numeric_match, parse_number
 
-def select(pool: pd.DataFrame, rates: pd.DataFrame, low: float, high: float, unequal: bool = False) -> pd.DataFrame:
+
+def wrong_majority(answers: Sequence[str | None], scores: Sequence[float], finish: Sequence[str]) -> bool:
+    """True if one wrong numeric answer is given by more finished samples than score 1.
+
+    For problems a model wrote itself (P7.5), whose gold comes from its own program: in
+    the pilot (11511420) 20 of the 23 such problems had a wrong or ambiguous gold, or
+    one that S-fin reports at another precision. Two answers count as the same one when
+    the finance verifier would accept either for the other (numeric_match).
+    """
+    right = sum(s >= 1 - 1e-9 for s in scores)
+    reps: list[str] = []
+    counts: list[int] = []
+    for a, s, f in zip(answers, scores, finish, strict=True):
+        if s >= 1 - 1e-9 or f != "stop" or not a or parse_number(a) is None:
+            continue
+        for i, r in enumerate(reps):
+            if numeric_match(a, r):
+                counts[i] += 1
+                break
+        else:
+            reps.append(a)
+            counts.append(1)
+    return max(counts, default=0) > right
+
+
+def select(pool: pd.DataFrame, rates: pd.DataFrame, low: float, high: float, unequal: bool = False,
+           majority: bool = False) -> pd.DataFrame:
     """Rows of pool whose (data_source, id) has a pass rate in [low, high].
 
     With unequal, the rows whose k scores are not all equal instead: the condition for a
     nonzero group advantage. For a 0/1 reward these are the prompts with a pass rate in
     [1/k, 1 - 1/k], [0.1, 0.9] at k = 8; a graded reward keeps more (CAIL term in the P7
-    pilot, 11527721: 232 of 300 prompts against 147 by the pass rate at score 1).
+    pilot, 11527721: 232 of 300 prompts against 147 by the pass rate at score 1). With
+    majority, prompts where a wrong answer outvotes the gold (wrong_majority) are dropped.
     """
     if unequal:
         keep = rates[rates["scores"].map(lambda s: max(s) > min(s))]
     else:
         keep = rates[(rates["pass_rate"] >= low) & (rates["pass_rate"] <= high)]
+    if majority:
+        out = [wrong_majority(a, s, f) for a, s, f in zip(keep["answers"], keep["scores"], keep["finish"], strict=True)]
+        keep = keep[[not x for x in out]]
     keys = set(zip(keep["data_source"], keep["id"], strict=True))
     mask = [(ds, e["id"]) in keys for ds, e in zip(pool["data_source"], pool["extra_info"], strict=True)]
     return pool[mask]
@@ -57,6 +89,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--high", type=float, default=0.9)
     ap.add_argument("--unequal", action="store_true",
                     help="keep prompts whose k scores are not all equal instead of --low/--high (P7: graded rewards)")
+    ap.add_argument("--majority", action="store_true",
+                    help="drop prompts where one wrong numeric answer outvotes the gold (P7.5: self-made problems)")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--val", nargs="+", required=True, help="validation parquet files, listed as they are")
     ap.add_argument("--train", nargs="+", required=True, help="train parquet files to select from")
@@ -69,11 +103,11 @@ def main() -> None:
     rates = pd.read_parquet(args.passrate)
     args.out.mkdir(parents=True, exist_ok=True)
     rule = {"unequal": True} if args.unequal else {"low": args.low, "high": args.high}
-    summary: dict = {"passrate": args.passrate, **rule, "sources": {}}
+    summary: dict = {"passrate": args.passrate, **rule, "majority": args.majority, "sources": {}}
     listed = []
     for f in args.train:
         pool = pd.read_parquet(f)
-        kept = select(pool, rates, args.low, args.high, args.unequal)
+        kept = select(pool, rates, args.low, args.high, args.unequal, args.majority)
         dst = args.out / (Path(f).stem + "_pool.parquet")
         kept.to_parquet(dst, index=False)
         listed.append(str(dst))
