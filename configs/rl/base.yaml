@@ -92,6 +92,11 @@ trainer:
   n_gpus_per_node: 1
   nnodes: 1
   val_before_train: true
+  # A run's length is total_training_steps (a leg's, cluster/rl.sbatch's LEG_STEPS).
+  # verl 0.9.1 also stops after total_epochs passes over the pool (default 30), and
+  # that bound PPO: 1,024 prompts a step on the 2,308-prompt finance pool is 2 steps
+  # an epoch, so it stopped at step 60 with no error (F#70). Large enough never to bind.
+  total_epochs: 1000
   test_freq: 10
   save_freq: 10
   max_actor_ckpt_to_keep: 2
