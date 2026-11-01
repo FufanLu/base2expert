@@ -106,6 +106,8 @@ def test_build_pairs_rescored_held_out_and_in_trl_format(parts):
             assert msgs[0]["content"].startswith("<think>\n") and "\n</think>\n\n" in msgs[0]["content"]
             assert compute_score(r.data_source, msgs[0]["content"], r.ground_truth, thinking=True) == want
     assert summary["tokens"]["matched_abs_gap_mean"] <= summary["tokens"]["random_abs_gap_mean"]
+    # main writes it as JSON: a numpy int64 in it stopped the first real run (11555774)
+    assert json.loads(json.dumps(summary)) == summary
 
 
 def test_load_samples_needs_texts_for_every_prompt(parts):

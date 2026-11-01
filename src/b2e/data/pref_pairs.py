@@ -145,7 +145,7 @@ def build(samples: pd.DataFrame, prompts: pd.DataFrame, per_source: int, seed: i
     for ds, texts, gt, old in zip(samples["data_source"], samples["texts"], samples["ground_truth"],
                                   samples["scores"], strict=True):
         new = [compute_score(ds, t, gt, thinking=True) for t in texts]
-        changed += sum(abs(a - b) > 1e-9 for a, b in zip(new, old, strict=True))
+        changed += int(sum(abs(a - b) > 1e-9 for a, b in zip(new, old, strict=True)))  # numpy bools from parquet
         rescored.append(new)
     samples = samples.assign(scores=rescored)
     samples["pairs"] = [pair_prompt(s, f, t, x) for s, f, t, x in
