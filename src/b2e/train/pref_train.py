@@ -5,8 +5,8 @@ A run is configs/po/<run>.yaml: the method, the starting model, the rendered pai
 the method's TRL config. One GPU, full fine-tuning:
   - the policy is loaded in fp32 and trained under bf16 autocast (bf16: true), so
     AdamW updates fp32 weights. At DPO's learning rates (~5e-7) a bf16 weight cannot
-    hold the update: with 8 bits of mantissa, a relative change below ~0.4 % rounds
-    away.
+    hold the update: bf16 keeps 8 significant bits, so round-to-nearest drops a change
+    below half the spacing, ~0.2-0.4 % of the weight; Adam's step at 5e-7 is ~1e-5 of it.
   - Qwen3_5ForConditionalGeneration's vision tower is frozen but kept, so the export
     has S-fin's architecture (cluster/common.sh check_arch).
   - DPO and KTO compare against S-fin itself, loaded again in bf16 and frozen; SimPO
