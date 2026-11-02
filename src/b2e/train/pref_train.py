@@ -67,15 +67,26 @@ def load_policy(path: Path):
     return model, frozen
 
 
+def set_dtype(config, dtype) -> None:
+    """dtype on a config and on each of its sub-configs, as transformers sets it when it loads a model."""
+    for c in (config, *(getattr(config, k) for k in config.sub_configs)):
+        if c is not None:
+            c.dtype = dtype
+
+
 def export(model, final: Path) -> None:
     """The weights in bf16, as every other export. transformers 5.x writes safetensors only
     (save_pretrained's safe_serialization is gone; extra keywords go to push_to_hub), under the
-    checkpoint's original names (save_original_format). The job copies the starting model's own
-    tokenizer and processor files next to them (cluster/common.sh keep_tokenizer), since
-    transformers re-serializes them differently."""
+    checkpoint's original names (save_original_format). save_pretrained records the weights'
+    dtype on the top config only, so the text and vision configs would keep the float32 the
+    policy was loaded in (11560138); set_dtype makes the config S-fin's again. The job copies
+    the starting model's own tokenizer and processor files next to them (cluster/common.sh
+    keep_tokenizer), since transformers re-serializes them differently."""
     import torch
 
-    model.to(torch.bfloat16).save_pretrained(final)
+    model.to(torch.bfloat16)
+    set_dtype(model.config, torch.bfloat16)
+    model.save_pretrained(final)
 
 
 def unpaired(pairs: list[dict]) -> list[dict]:

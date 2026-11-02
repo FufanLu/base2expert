@@ -10,6 +10,7 @@ from b2e.train.pref_train import (
     kl_partner,
     load_pairs,
     longest,
+    set_dtype,
     unpaired,
 )
 
@@ -135,6 +136,23 @@ def test_bool_found_gives_trl_a_bool_and_keeps_the_version_tuple():
     available = bool_found(found)
     assert available("weave") is False and available("here") is True
     assert available("here", return_version=True) == (True, "1.0")
+
+
+def test_set_dtype_reaches_every_sub_config():
+    class Sub:
+        dtype = "float32"
+
+    class Config:
+        sub_configs = {"text_config": Sub, "vision_config": Sub, "audio_config": Sub}
+
+        def __init__(self, **subs):
+            self.dtype = "float32"
+            self.__dict__.update(subs)
+
+    text, vision = Sub(), Sub()
+    cfg = Config(text_config=text, vision_config=vision, audio_config=None)  # a sub-config may be absent
+    set_dtype(cfg, "bfloat16")
+    assert (cfg.dtype, text.dtype, vision.dtype) == ("bfloat16", "bfloat16", "bfloat16")
 
 
 def test_load_pairs_reads_the_rendered_strings(tmp_path):
