@@ -1,0 +1,46 @@
+# P7: R-law with P6's recipe, DAPO (docs/runs.md, 11-02: highest pooled finance score with
+# thinking, no arm within one paired se, no veto), from S-law on the law pool (CAIL2018 term,
+# charges, articles; processed/law_pool, written by jobs/p7_pool_select.sh).
+#   clip-higher        clip_ratio_high 0.28 (low stays 0.2), as dapo_fin
+#   token-level loss   loss_agg_mode token-mean (the base setting)
+#   overlong shaping   the last quarter of the cap, as in finance: 1,024 of 4,096. S-law ends
+#                      a quarter of its pilot samples inside that zone (finance: 9 %), so the
+#                      length pressure is stronger here (docs/runs.md, 11-01)
+#   cap                4,096 response tokens: the law pilot cut 6.0 % (finance 4.4 %), and
+#                      7.1 % of the kept prompts are kept only for their cut answers
+#   val                all 600 rows of p7_split/cail_train_val (train prompts no eval uses,
+#                      not filtered by pass rate); verl's default -1 keeps every row
+#   steps              150, the length the pools were sized for (>= steps x 128 / 3 kept
+#                      prompts, F#58); P6's step-90 rule decides whether a run stops at 90
+#   LEG_STEPS=<n> cluster/submit_rl.sh dapo_law s_law law_pool <legs>
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    clip_ratio_low: 0.2
+    clip_ratio_high: 0.28
+
+reward:
+  reward_manager:
+    name: dapo
+  reward_kwargs:
+    max_resp_len: ${data.max_response_length}
+    overlong_buffer_cfg:
+      enable: true
+      len: 1024
+      penalty_factor: 1.0
+      log: false
+
+data:
+  max_response_length: 4096
+  val_max_samples: -1
+
+trainer:
+  experiment_name: dapo_law
+  total_training_steps: 150

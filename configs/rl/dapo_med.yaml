@@ -1,0 +1,46 @@
+# P7: R-med with P6's recipe, DAPO (docs/runs.md, 11-02), from S-med on the medicine pool
+# (MedQA, MedMCQA, CMExam; processed/med_pool, written by jobs/p7_pool_select.sh).
+#   clip-higher        clip_ratio_high 0.28 (low stays 0.2), as dapo_fin
+#   token-level loss   loss_agg_mode token-mean (the base setting)
+#   overlong shaping   the last quarter of the cap, as in finance: 2,048 of 8,192. 4.35 % of
+#                      S-med's samples finish inside that zone and 4.42 % are cut, close to
+#                      finance's 9.3 % and 4.4 % (docs/runs.md, 11-01)
+#   cap                8,192 response tokens, set for finance's cut share: at 4,096 S-med cut
+#                      18.0 % (MedQA 39.8 %), so MedQA's signal would mostly have been finishing
+#                      in time; at 8,192 4.4 % (the pilot 11541025)
+#   val                all 600 rows of p7_split/*_train_val (200 a source); verl's default -1
+#                      keeps every row
+#   steps              150, the length the pools were sized for (F#58); P6's step-90 rule
+#                      decides whether a run stops at 90
+#   LEG_STEPS=<n> cluster/submit_rl.sh dapo_med s_med med_pool <legs>
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    clip_ratio_low: 0.2
+    clip_ratio_high: 0.28
+
+reward:
+  reward_manager:
+    name: dapo
+  reward_kwargs:
+    max_resp_len: ${data.max_response_length}
+    overlong_buffer_cfg:
+      enable: true
+      len: 2048
+      penalty_factor: 1.0
+      log: false
+
+data:
+  max_response_length: 8192
+  val_max_samples: -1
+
+trainer:
+  experiment_name: dapo_med
+  total_training_steps: 150
