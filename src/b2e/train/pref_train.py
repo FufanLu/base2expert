@@ -18,8 +18,10 @@ tokenize_row; CPO and ORPO the older build_tokenized_answer path; KTO _tokenize)
 so the check is on what each one built, and a mismatch stops the run. KTO's KL rows, which
 TRL pairs up by dataset order, are checked too: each must pair a prompt with another prompt's answer.
 CPO, KTO and ORPO come from trl.experimental: the trl.trainer names only forward
-there and warn (removed in TRL 0.29). TRL 0.27 next to transformers 5.9 needs one fix before
-any trainer is imported (fix_trl_availability).
+there and warn (removed in TRL 0.29). TRL 0.27 next to transformers 5.9 needs three fixes,
+all found on a CPU node before any GPU run: fix_trl_availability before any trainer is
+imported; an empty model.warnings_issued for each trainer to write to; and DPO kept from
+taking S-fin for a vision model (trainer_for).
 
     python -P -m b2e.train.pref_train --config configs/po/dpo_fin.yaml --model $MODELS/s_fin \\
         --data $B/data/processed/pref_fin --out $CKPT/dpo_fin [--max-steps 3 --rows 16]
@@ -39,12 +41,41 @@ METHODS = ("dpo", "simpo", "kto", "orpo")
 LABEL_PAD = -100
 
 
-def load_pairs(data: Path, split: str, rows: int | None = None) -> list[dict]:
+def load_pairs(data: Path, split: str) -> list[dict]:
     """The rendered pairs of a split (train or test) as dicts of strings."""
-    df = pd.read_parquet(data / f"{split}_rendered.parquet")
-    if rows:
-        df = df.head(rows)
-    return df[["prompt", "chosen", "rejected"]].to_dict("records")
+    return pd.read_parquet(data / f"{split}_rendered.parquet")[["prompt", "chosen", "rejected"]].to_dict("records")
+
+
+def longest(tok, pairs: list[dict], n: int) -> list[dict]:
+    """The n pairs with the longest sequence (prompt, the longer answer, eos), longest first."""
+    def length(p: dict) -> int:
+        return max(len(expected(tok, p["prompt"], p[k])) for k in ("chosen", "rejected"))
+    return sorted(pairs, key=length, reverse=True)[:n]
+
+
+def load_policy(path: Path):
+    """The policy in fp32, so that AdamW updates fp32 weights; the vision tower frozen but kept."""
+    import torch
+    from transformers import AutoModelForImageTextToText
+
+    model = AutoModelForImageTextToText.from_pretrained(path, dtype=torch.float32)
+    frozen = []
+    for n, p in model.named_parameters():
+        if "visual" in n:
+            p.requires_grad_(False)
+            frozen.append(n)
+    return model, frozen
+
+
+def export(model, final: Path) -> None:
+    """The weights in bf16, as every other export. transformers 5.x writes safetensors only
+    (save_pretrained's safe_serialization is gone; extra keywords go to push_to_hub), under the
+    checkpoint's original names (save_original_format). The job copies the starting model's own
+    tokenizer and processor files next to them (cluster/common.sh keep_tokenizer), since
+    transformers re-serializes them differently."""
+    import torch
+
+    model.to(torch.bfloat16).save_pretrained(final)
 
 
 def unpaired(pairs: list[dict]) -> list[dict]:
@@ -181,28 +212,45 @@ def fix_trl_availability() -> bool:
     return True
 
 
+def trl_classes(method: str):
+    """The TRL config and trainer classes of a method."""
+    if method == "dpo":
+        from trl import DPOConfig, DPOTrainer
+
+        class TextDPOTrainer(DPOTrainer):
+            """S-fin's model_type, qwen3_5, is in transformers' image-text-to-text table, so TRL's DPO
+            takes it for a vision model and tokenizes with process_row, which wants images and a
+            processor. The pairs are text only: tokenize_row, as for a text model."""
+
+            def _prepare_dataset(self, *args, **kwargs):
+                self.is_vision_model = False
+                return super()._prepare_dataset(*args, **kwargs)
+
+        return DPOConfig, TextDPOTrainer
+    if method == "kto":
+        from trl.experimental.kto import KTOConfig, KTOTrainer
+        return KTOConfig, KTOTrainer
+    if method == "simpo":
+        from trl.experimental.cpo import CPOConfig, CPOTrainer
+        return CPOConfig, CPOTrainer
+    from trl.experimental.orpo import ORPOConfig, ORPOTrainer
+    return ORPOConfig, ORPOTrainer
+
+
 def trainer_for(method: str, cfg: dict, model, ref, tok, train: list[dict], test: list[dict], out: Path):
     from datasets import Dataset
 
-    if method == "dpo":
-        from trl import DPOConfig as Config
-        from trl import DPOTrainer as Trainer
-        extra = {"ref_model": ref}
-    elif method == "kto":
-        from trl.experimental.kto import KTOConfig as Config
-        from trl.experimental.kto import KTOTrainer as Trainer
-        extra = {"ref_model": ref}
+    Config, Trainer = trl_classes(method)
+    extra = {"ref_model": ref} if method in ("dpo", "kto") else {}
+    if method == "kto":
         train, test = unpaired(train), unpaired(test)
-    elif method == "simpo":
-        from trl.experimental.cpo import CPOConfig as Config
-        from trl.experimental.cpo import CPOTrainer as Trainer
-        extra = {}
+    if method == "simpo":
         cfg = {**cfg, "loss_type": "simpo", "cpo_alpha": 0.0}
-    else:
-        from trl.experimental.orpo import ORPOConfig as Config
-        from trl.experimental.orpo import ORPOTrainer as Trainer
-        extra = {}
     args = Config(output_dir=str(out), **cfg)
+    # each TRL 0.27 trainer sets model.warnings_issued["estimate_tokens"] to silence a FLOP-count
+    # warning; transformers 5.x models no longer have that dict (11559990)
+    if not hasattr(model, "warnings_issued"):
+        model.warnings_issued = {}
     return Trainer(model=model, args=args, train_dataset=Dataset.from_list(train),
                    eval_dataset=Dataset.from_list(test), processing_class=tok, **extra), train
 
@@ -213,8 +261,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap.add_argument("--model", type=Path, required=True, help="the starting model dir (S-fin)")
     ap.add_argument("--data", type=Path, required=True, help="dir with train/test_rendered.parquet")
     ap.add_argument("--out", type=Path, required=True)
-    ap.add_argument("--max-steps", type=int, default=None, help="smoke: stop after this many steps")
-    ap.add_argument("--rows", type=int, default=None, help="smoke: only the first rows of each split")
+    ap.add_argument("--max-steps", type=int, default=None,
+                    help="smoke: stop after this many steps, evaluating once at the last, and save nothing")
+    ap.add_argument("--rows", type=int, default=None,
+                    help="smoke: only the N longest pairs of each split, so it meets the full run's longest sequences")
     ap.add_argument("--padding-check", action="store_true",
                     help="smoke: before training, compare log-probs alone and right-padded in a batch")
     return ap.parse_args(argv)
@@ -226,24 +276,22 @@ def main() -> None:
     method, cfg = spec["method"], dict(spec["trl"])
     if method not in METHODS:
         raise SystemExit(f"method {method!r} is not one of {METHODS}")
-    if a.max_steps:
-        cfg.update(max_steps=a.max_steps, save_strategy="no", eval_strategy="no")
+    if a.max_steps:  # the evaluation path too: the full runs evaluate every eval_steps
+        cfg.update(max_steps=a.max_steps, save_strategy="no", eval_strategy="steps", eval_steps=a.max_steps)
 
     import torch
     from transformers import AutoModelForImageTextToText, AutoTokenizer
 
     tok = AutoTokenizer.from_pretrained(a.model)
-    model = AutoModelForImageTextToText.from_pretrained(a.model, dtype=torch.float32)
-    frozen = [n for n, p in model.named_parameters() if "visual" in n]
-    for n, p in model.named_parameters():
-        if "visual" in n:
-            p.requires_grad_(False)
+    model, frozen = load_policy(a.model)
     ref = None
     if method in ("dpo", "kto"):
         ref = AutoModelForImageTextToText.from_pretrained(a.model, dtype=torch.bfloat16).eval()
         ref.requires_grad_(False)
 
-    train, test = load_pairs(a.data, "train", a.rows), load_pairs(a.data, "test", a.rows)
+    train, test = load_pairs(a.data, "train"), load_pairs(a.data, "test")
+    if a.rows:
+        train, test = longest(tok, train, a.rows), longest(tok, test, a.rows)
     if a.padding_check:
         model.cuda()
         print(json.dumps({"padding_check": padding_check(model, tok, train)}), flush=True)
@@ -264,11 +312,8 @@ def main() -> None:
                       "peak_gpu_gb": round(torch.cuda.max_memory_allocated() / 2**30, 1)}), flush=True)
     if a.max_steps:
         return
-    # weights only, in bf16 as every other export; the job copies the starting model's own
-    # tokenizer and processor files next to them (cluster/common.sh keep_tokenizer), since
-    # transformers re-serializes them differently
     final = a.out / "final"
-    model.to(torch.bfloat16).save_pretrained(final, safe_serialization=True)
+    export(model, final)
     print(json.dumps({"saved": str(final)}), flush=True)
 
 

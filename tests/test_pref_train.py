@@ -9,6 +9,7 @@ from b2e.train.pref_train import (
     expected,
     kl_partner,
     load_pairs,
+    longest,
     unpaired,
 )
 
@@ -139,8 +140,15 @@ def test_bool_found_gives_trl_a_bool_and_keeps_the_version_tuple():
 def test_load_pairs_reads_the_rendered_strings(tmp_path):
     pd.DataFrame([{"prompt": P, "chosen": C, "rejected": R, "id": str(i)} for i in range(5)]).to_parquet(
         tmp_path / "train_rendered.parquet", index=False)
-    assert load_pairs(tmp_path, "train", rows=2) == SOURCE * 2
-    assert len(load_pairs(tmp_path, "train")) == 5
+    assert load_pairs(tmp_path, "train") == SOURCE * 5
+
+
+def test_longest_takes_the_pairs_with_the_longest_sequence():
+    pairs = [{"prompt": "p" * n, "chosen": "c" * c, "rejected": "r" * r}
+             for n, c, r in [(5, 1, 1), (1, 9, 2), (3, 2, 6), (2, 3, 3)]]
+    # prompt + the longer answer + eos: 7, 11, 10, 6
+    assert longest(TOK, pairs, 2) == [pairs[1], pairs[2]]
+    assert longest(TOK, pairs, 10) == [pairs[1], pairs[2], pairs[0], pairs[3]]
 
 
 def test_po_configs_share_the_settings_and_do_not_cut_any_pair():
