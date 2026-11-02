@@ -42,9 +42,14 @@ def to_list(path: Path) -> str:
 
 
 def gold_text(gt: dict) -> str:
+    """The gold answer as a model writes it inside \\boxed{}."""
     if gt["kind"] == "number":  # positional: "0.00001", not repr's "1e-05"
         import numpy as np
         return np.format_float_positional(float(gt["value"]), trim="-")
+    if gt["kind"] in ("charges", "articles"):  # CAIL's sets, listed with 、 (str() would give "['盗窃']")
+        return "、".join(str(v) for v in gt["value"])
+    if gt["kind"] == "term":  # CAIL's prison term has months and the death / life flags, no "value"
+        return "死刑" if gt.get("death") else "无期徒刑" if gt.get("life") else f"{gt['months']:g}个月"
     return str(gt["value"])
 
 
