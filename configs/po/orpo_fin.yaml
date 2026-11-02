@@ -1,0 +1,29 @@
+# ORPO on the P5 finance pairs, from S-fin: the SFT loss on the chosen answer plus
+# lambda times the odds-ratio term, no reference model. Shares data, batch, lengths and
+# learning rate with dpo_fin.yaml (the ORPO paper trains from a base model at a higher
+# rate; from S-fin the shared 5e-7 keeps the comparison to the method).
+#   beta 0.1 (lambda)   the ORPO paper's value
+#   RUN=orpo_fin MODEL_NAME=s_fin PREF_DATA=pref_fin sbatch --job-name=b2e-orpo_fin cluster/pref.sbatch
+method: orpo
+trl:
+  beta: 0.1
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 32
+  max_prompt_length: 3072
+  max_completion_length: 4096
+  max_length: 7168
+  learning_rate: 5.0e-7
+  lr_scheduler_type: linear
+  warmup_ratio: 0.1
+  num_train_epochs: 2
+  per_device_eval_batch_size: 1
+  bf16: true
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs: {use_reentrant: false}
+  eval_strategy: steps
+  eval_steps: 27
+  save_strategy: "no"
+  logging_steps: 1
+  report_to: [wandb]
+  seed: 0
+  dataset_num_proc: 1

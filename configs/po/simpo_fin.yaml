@@ -1,0 +1,30 @@
+# SimPO on the P5 finance pairs, from S-fin: TRL's CPO trainer with the simpo loss and
+# cpo_alpha 0 (b2e.train.pref_train sets both), so no reference model and no NLL term.
+# Shares data, batch, lengths and learning rate with dpo_fin.yaml (see there).
+#   beta 2.0, simpo_gamma 1.0   the SimPO paper's range (beta 2-2.5, gamma/beta ~0.5);
+#                               its reward is the length-normalized log-probability
+#   RUN=simpo_fin MODEL_NAME=s_fin PREF_DATA=pref_fin sbatch --job-name=b2e-simpo_fin cluster/pref.sbatch
+method: simpo
+trl:
+  beta: 2.0
+  simpo_gamma: 1.0
+  per_device_train_batch_size: 1
+  gradient_accumulation_steps: 32
+  max_prompt_length: 3072
+  max_completion_length: 4096
+  max_length: 7168
+  learning_rate: 5.0e-7
+  lr_scheduler_type: linear
+  warmup_ratio: 0.1
+  num_train_epochs: 2
+  per_device_eval_batch_size: 1
+  bf16: true
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs: {use_reentrant: false}
+  eval_strategy: steps
+  eval_steps: 27
+  save_strategy: "no"
+  logging_steps: 1
+  report_to: [wandb]
+  seed: 0
+  dataset_num_proc: 1

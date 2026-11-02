@@ -1,0 +1,39 @@
+# DPO on the P5 finance pairs (processed/pref_fin: S-fin's own answers, finished
+# right against finished wrong, length-matched; docs/runs.md 11555856), from S-fin.
+# The four P5 methods share the data, the batch, the length limits and the
+# learning rate, and take their method parameter from the paper; per-method
+# tuning was not done (one run each).
+#   beta 0.1            the DPO paper's value
+#   learning rate 5e-7  common for DPO from an SFT model; fp32 weights under bf16
+#                       autocast hold updates this small (b2e.train.pref_train)
+#   32 pairs a step     1 per device x 32 accumulated; 1,719 pairs x 2 epochs
+#                       = ~108 steps
+#   lengths             prompt <= 3,051 and prompt + completion <= 6,903 tokens
+#                       (tools/check_pref_render.py, 11556254): TRL's defaults
+#                       (512, 1,024) would cut nearly every pair
+#   RUN=dpo_fin MODEL_NAME=s_fin PREF_DATA=pref_fin sbatch --job-name=b2e-dpo_fin cluster/pref.sbatch
+method: dpo
+trl:
+  beta: 0.1
+  loss_type: [sigmoid]
+  learning_rate: 5.0e-7
+  lr_scheduler_type: linear
+  warmup_ratio: 0.1
+  num_train_epochs: 2
+  per_device_train_batch_size: 1
+  per_device_eval_batch_size: 1
+  gradient_accumulation_steps: 32
+  max_prompt_length: 3072
+  max_completion_length: 4096
+  max_length: 7168
+  use_logits_to_keep: true
+  bf16: true
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs: {use_reentrant: false}
+  eval_strategy: steps
+  eval_steps: 27
+  save_strategy: "no"
+  logging_steps: 1
+  report_to: [wandb]
+  seed: 0
+  dataset_num_proc: 1

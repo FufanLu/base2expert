@@ -1,0 +1,32 @@
+# KTO on the P5 finance pairs, from S-fin: each pair split into a desirable and an
+# undesirable completion (b2e.train.pref_train.unpaired), so the two classes are equal
+# and both weights stay 1. Shares data, lengths and learning rate with dpo_fin.yaml.
+#   beta 0.1                      the KTO paper's default
+#   2 completions per device      KTO estimates its reference point from mismatched
+#                                 prompt-completion pairs within a device batch, which
+#                                 needs more than one; 2 x 32 accumulated = 64
+#                                 completions = 32 pairs a step, as the other methods
+#   RUN=kto_fin MODEL_NAME=s_fin PREF_DATA=pref_fin sbatch --job-name=b2e-kto_fin cluster/pref.sbatch
+method: kto
+trl:
+  beta: 0.1
+  desirable_weight: 1.0
+  undesirable_weight: 1.0
+  per_device_train_batch_size: 2
+  gradient_accumulation_steps: 32
+  max_length: 7168
+  learning_rate: 5.0e-7
+  lr_scheduler_type: linear
+  warmup_ratio: 0.1
+  num_train_epochs: 2
+  per_device_eval_batch_size: 1
+  bf16: true
+  gradient_checkpointing: true
+  gradient_checkpointing_kwargs: {use_reentrant: false}
+  eval_strategy: steps
+  eval_steps: 27
+  save_strategy: "no"
+  logging_steps: 1
+  report_to: [wandb]
+  seed: 0
+  dataset_num_proc: 1
