@@ -37,6 +37,8 @@ def test_md_table():
 
 def test_law_and_choice_dispatch():
     assert compute_score("cail2018_charges", "\\boxed{盗窃罪}", gt(kind="charges", value=["盗窃"])) == 1.0
+    drugs = gt(kind="charges", value=["[走私、贩卖、运输、制造]毒品"])  # a selective charge (F#86)
+    assert compute_score("cail2018_charges", "\\boxed{贩卖毒品罪}", drugs) == 1.0
     assert compute_score("cail2018_articles", "\\boxed{264}", gt(kind="articles", value=[264])) == 1.0
     assert compute_score("cail2018_term", "\\boxed{一年}", gt(kind="term", months=18.0)) == 0.8
     assert compute_score("medqa", "\\boxed{B}", gt(kind="choice", value="B")) == 1.0

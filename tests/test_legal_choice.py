@@ -1,10 +1,47 @@
+import pytest
+
 from b2e.reward.choice import choice_match, letters
-from b2e.reward.legal import norm_articles, norm_charges, parse_term, term_score
+from b2e.reward.legal import charge_forms, charges_match, norm_articles, norm_charges, parse_term, term_score
+
+DRUGS = "[走私、贩卖、运输、制造]毒品"  # the most frequent CAIL label with a bracketed group
 
 
 def test_charges_normalized():
     assert norm_charges("盗窃罪、诈骗罪") == {"盗窃", "诈骗"}
     assert norm_charges("罪名：故意伤害") == {"故意伤害"}
+
+
+def test_charge_forms_expand_a_selective_charge_in_the_statutes_order():
+    assert charge_forms("盗窃") == ["盗窃"]
+    forms = charge_forms(DRUGS)
+    assert len(forms) == 15 and {"贩卖毒品", "贩卖、运输毒品", "走私、贩卖、运输、制造毒品"} <= set(forms)
+    assert "运输、贩卖毒品" not in forms
+    two = charge_forms("[掩饰、隐瞒][犯罪所得、犯罪所得收益]")
+    assert len(two) == 9 and {"掩饰犯罪所得", "掩饰、隐瞒犯罪所得、犯罪所得收益"} <= set(two)
+
+
+@pytest.mark.parametrize("pred, gold, ok", [
+    ("盗窃罪、诈骗罪", ["盗窃", "诈骗"], True),
+    ("诈骗，盗窃", ["盗窃", "诈骗"], True),
+    ("盗窃", ["盗窃", "诈骗"], False),
+    ("盗窃、抢劫", ["盗窃"], False),
+    ("贩卖毒品", [DRUGS], True),
+    ("贩卖、运输毒品罪", [DRUGS], True),
+    (DRUGS, [DRUGS], True),  # the label itself, brackets and all
+    ("走私、贩卖、运输、制造毒品罪", [DRUGS], True),
+    ("毒品", [DRUGS], False),
+    ("贩卖毒品罪、盗窃罪", [DRUGS, "盗窃"], True),
+    ("贩卖毒品", [DRUGS, "盗窃"], False),
+    ("包庇", ["[窝藏、包庇]"], True),
+    ("罪名：容留卖淫", ["[引诱、容留、介绍]卖淫"], True),
+    ("被告人犯盗窃罪", ["盗窃"], False),
+    ("", ["盗窃"], False),
+])
+def test_charges_match(pred, gold, ok):
+    assert charges_match(pred, gold) is ok
+    # the old comparison, norm_charges against the gold names, could never pay a bracketed label
+    if any("[" in g for g in gold) and ok:
+        assert norm_charges(pred) != set(gold)
 
 
 def test_articles():

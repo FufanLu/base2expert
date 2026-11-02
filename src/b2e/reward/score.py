@@ -22,7 +22,7 @@ import json
 
 from b2e.reward.choice import choice_match
 from b2e.reward.ifcheck import if_score
-from b2e.reward.legal import norm_articles, norm_charges, term_score
+from b2e.reward.legal import charges_match, norm_articles, term_score
 from b2e.reward.numeric import extract_boxed, numeric_match
 
 SCALE = {"": 1.0, "thousand": 1e3, "million": 1e6, "billion": 1e9, "percent": 1.0}
@@ -56,7 +56,7 @@ def compute_score(data_source: str, solution_str: str, ground_truth, extra_info=
     if gt["kind"] == "choice":
         return 1.0 if choice_match(answer, gt["value"]) else 0.0
     if gt["kind"] == "charges":
-        return 1.0 if norm_charges(answer) == set(gt["value"]) else 0.0
+        return 1.0 if charges_match(answer, gt["value"]) else 0.0
     if gt["kind"] == "articles":
         return 1.0 if norm_articles(answer) == set(gt["value"]) else 0.0
     if gt["kind"] == "term":

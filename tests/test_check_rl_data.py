@@ -13,6 +13,7 @@ GOLDS = [
     {"kind": "number", "value": 1e-05},
     {"kind": "choice", "value": "B"},
     {"kind": "charges", "value": ["抢劫", "盗窃"]},
+    {"kind": "charges", "value": ["[走私、贩卖、运输、制造]毒品", "盗窃"]},
     {"kind": "articles", "value": [25, 264]},
     {"kind": "term", "months": 18.0, "death": False, "life": False},
     {"kind": "term", "months": 0.0, "death": True, "life": False},
