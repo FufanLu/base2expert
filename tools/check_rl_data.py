@@ -78,7 +78,12 @@ def main() -> None:
     print("processor:", type(proc).__name__ if proc is not None else None)
     kwargs = OmegaConf.to_container(cfg.data.get("apply_chat_template_kwargs", {}))
     thinking = bool(kwargs.get("enable_thinking", False))
-    score = get_custom_reward_fn(cfg)
+    fn = get_custom_reward_fn(cfg)
+
+    def score(**kw) -> float:  # a reward function may return a dict (b2e.reward.budget): its "score"
+        r = fn(**kw)
+        return r["score"] if isinstance(r, dict) else r
+
     print("reward_kwargs:", OmegaConf.to_container(cfg.reward.custom_reward_function.get("reward_kwargs", {})))
     actor = cfg.actor_rollout_ref.actor
     print(f"policy updates per step: {cfg.data.train_batch_size} / {actor.ppo_mini_batch_size} = "

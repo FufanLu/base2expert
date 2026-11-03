@@ -50,3 +50,14 @@ def test_no_budget_means_the_usual_score(lengths):
     lengths(10_000)
     out = budget_mod.compute_score("finqa_low", "</think>\\boxed{2}", ROW["reward_model"]["ground_truth"], {})
     assert out["score"] == 1.0 and out["over_budget"] == 0.0
+
+
+def test_the_multiplier_and_thinking_come_from_reward_kwargs(lengths, monkeypatch):
+    monkeypatch.delenv("B2E_BUDGET_MULT", raising=False)
+    gt = ROW["reward_model"]["ground_truth"]
+    lengths(150)
+    kw = {"budget_mult": 0.5, "model_path": "unused", "thinking": True}
+    assert budget_mod.compute_score("finqa_low", "</think>\\boxed{2}", gt, {"budget": 400.0}, **kw)["score"] == 1.0
+    assert budget_mod.compute_score("finqa_low", "</think>\\boxed{2}", gt, {"budget": 200.0}, **kw)["score"] == -1.0
+    # thinking=True reaches the verifier: an answer that never closed its thinking scores 0
+    assert budget_mod.compute_score("finqa_low", "\\boxed{2} still thinking", gt, {"budget": 400.0}, **kw)["acc"] == 0.0

@@ -1,0 +1,49 @@
+# P7 effort control (docs/plan.md, 11-03; Kimi K3's recipe): R-fin-low, the low-effort
+# finance teacher, continued from R-fin (DAPO step 90, models/dapo_fin_step90) on the
+# low-effort pool (b2e.data.effort_pool: the finance pool with a "Reasoning effort: low."
+# system message, sources renamed *_low, and S-fin's median finished length on each prompt
+# as its budget).
+#   budget             a rollout longer than budget x budget_mult scores -1 even when right
+#                      (b2e.reward.budget); otherwise the verifier's score
+#   multiplier         R-fin's own rollouts are 0.48x S-fin's budget at the median (p10 0.34,
+#                      p90 0.64; 11594767), so 0.75 would leave 2 % over and change nothing.
+#                      Lowered per leg: 0.5 (42 % of R-fin's rollouts over), 0.35 (87 %),
+#                      0.25 (99 %), via B2E_BUDGET_MULT at submit time
+#   the rest           as dapo_fin (clip-higher, overlong shaping at the same 4,096 cap)
+#   B2E_BUDGET_MULT=0.5 LEG_STEPS=30 cluster/submit_rl.sh dapo_fin_low dapo_fin_step90 finance_low 1
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    clip_ratio_low: 0.2
+    clip_ratio_high: 0.28
+
+reward:
+  reward_manager:
+    name: dapo
+  reward_kwargs:
+    max_resp_len: ${data.max_response_length}
+    overlong_buffer_cfg:
+      enable: true
+      len: 1024
+      penalty_factor: 1.0
+      log: false
+  custom_reward_function:
+    path: ${oc.env:B2E_CODE}/src/b2e/reward/budget.py
+    name: compute_score
+    reward_kwargs:
+      budget_mult: ${oc.env:B2E_BUDGET_MULT}
+      model_path: ${oc.env:B2E_MODEL}
+
+data:
+  val_max_samples: 512
+
+trainer:
+  experiment_name: dapo_fin_low
+  total_training_steps: 90
