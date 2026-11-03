@@ -47,12 +47,15 @@ this run. runs.jsonl keeps every run's full summary (steps, MFU, seconds).
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import math
+import os
 import random
 import re
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -77,11 +80,12 @@ def summary(log: str) -> dict:
     return out
 
 
-def run_train(repo: Path, python: str, timeout_s: int) -> tuple[dict, str]:
+def run_train(repo: Path, python: str, timeout_s: int, env: dict | None = None) -> tuple[dict, str]:
     log = repo / "run.log"
     try:
         with log.open("w") as f:
-            subprocess.run([python, "train.py"], cwd=repo, stdout=f, stderr=subprocess.STDOUT, timeout=timeout_s)
+            subprocess.run([python, "train.py"], cwd=repo, stdout=f, stderr=subprocess.STDOUT, timeout=timeout_s,
+                           env=env)
     except subprocess.TimeoutExpired:
         return {}, f"timeout after {timeout_s} s"
     text = log.read_text(errors="replace")
@@ -180,93 +184,168 @@ def keep_margin(sd: float | None, n_cand: int, n_best: int, min_gain: float) -> 
     return max(min_gain, 2 * sd * math.sqrt(1 / n_cand + 1 / n_best)) if sd else min_gain
 
 
+# --- lanes, the candidate pool and the novelty check (--lanes, --pool-prob) ----
+
+def change_key(old: str, new: str) -> list[str]:
+    """The lines an edit removes and adds (stripped, sorted): two experiments that make the same
+    change have the same key, whichever commit they start from."""
+    lines = difflib.unified_diff(old.splitlines(), new.splitlines(), lineterm="", n=0)
+    return sorted({ln[0] + ln[1:].strip() for ln in lines
+                   if ln[:1] in "+-" and not ln.startswith(("+++", "---")) and ln[1:].strip()})
+
+
+def pick_parent(rng: random.Random, own_best: str, pool: list[str], prob: float) -> str:
+    """The commit a round edits: its lane's best, or with probability prob another commit kept in any lane."""
+    others = [c for c in pool if c != own_best]
+    return rng.choice(others) if others and rng.random() < prob else own_best
+
+
+class Shared:
+    """What the lanes share: the ideas tried (random proposer: no repeats across lanes), the changes
+    trained (novelty check), the commits kept in any lane (the candidate pool), and each lane's
+    results for the proposer to read."""
+
+    def __init__(self, repos: list[Path]) -> None:
+        self.lock = threading.Lock()
+        self.repos = repos
+        self.tried: set[str] = set()
+        self.changes: set[tuple[str, ...]] = set()
+        self.pool: list[str] = []
+        for repo in repos:
+            rows = [r.split("\t") for r in tsv_rows(repo)]
+            self.tried |= {r[4] for r in rows}
+            for r in rows:
+                if r[3] in ("keep", "kept") and r[0] not in self.pool:
+                    self.pool.append(r[0])
+            for f in sorted((repo / "rounds").glob("*.json")) if (repo / "rounds").exists() else []:
+                key = json.loads(f.read_text()).get("change")
+                if key:
+                    self.changes.add(tuple(key))
+
+    def results(self) -> str:
+        if len(self.repos) == 1:
+            return (self.repos[0] / "results.tsv").read_text()
+        return "".join(f"# lane {i} (GPU {i}{', which also serves the researcher' if i == 0 else ''})\n"
+                       + (r / "results.tsv").read_text() for i, r in enumerate(self.repos))
+
+
+def tsv_rows(repo: Path) -> list[str]:
+    tsv = repo / "results.tsv"
+    return tsv.read_text().splitlines()[1:] if tsv.exists() else []
+
+
+def ensure_worktree(repo: Path, lane: int) -> Path:
+    """Lane i > 0 works in its own git worktree next to the run's clone, on its own branch."""
+    path = repo.parent / f"{repo.name}-lane{lane}"
+    if not path.exists():
+        branch = git(repo, "rev-parse", "--abbrev-ref", "HEAD")
+        git(repo, "worktree", "add", "-q", "-b", f"{branch}-lane{lane}", str(path), "HEAD")
+    return path
+
+
 # --- loop -------------------------------------------------------------------
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--repo", type=Path, required=True, help="autoresearch checkout on the run's branch")
-    ap.add_argument("--python", required=True, help="interpreter of the env that runs train.py")
-    ap.add_argument("--program", type=Path, default=Path(__file__).with_name("program.md"))
-    ap.add_argument("--proposer", choices=["llm", "random"], required=True)
-    ap.add_argument("--llm-url", default="http://127.0.0.1:8000")
-    ap.add_argument("--llm-model", default="qwen3.6")
-    ap.add_argument("--temperature", type=float, default=0.7)
-    ap.add_argument("--max-tokens", type=int, default=12000)
-    ap.add_argument("--rounds", type=int, default=15)
-    ap.add_argument("--hours", type=float, default=0, help="stop starting new rounds after this long (0 = no limit)")
-    ap.add_argument("--timeout", type=int, default=600)
-    ap.add_argument("--seed", type=int, default=0)
-    ap.add_argument("--noise-runs", type=int, default=0, help="extra runs of the unchanged baseline (new run only)")
-    ap.add_argument("--min-gain", type=float, default=0.0, help="keep only if val_bpb < best - min_gain")
-    ap.add_argument("--confirm", type=int, default=0, help="re-runs of a candidate that passes the screen (0: one run)")
-    ap.add_argument("--screen-sd", type=float, default=1.0,
-                    help="with --confirm: standard deviations below the best's mean the first run must be")
-    args = ap.parse_args()
-
-    repo, rng, t0 = args.repo, random.Random(args.seed), time.time()
+def run_lane(args, lane: int, repo: Path, shared: Shared, program: str, t0: float) -> None:
+    """One lane of the loop: its own branch, results.tsv, baseline runs and best, on the job's
+    lane-th GPU when there are several. Every comparison (screen, confirm) is within the lane, so a
+    candidate is only ever measured against runs on the same GPU."""
+    rng = random.Random(args.seed + lane)
     tsv, rounds_dir = repo / "results.tsv", repo / "rounds"
     rounds_dir.mkdir(exist_ok=True)
     if not tsv.exists():
         tsv.write_text(HEADER)
-    program = args.program.read_text()
-    done = sum(1 for r in tsv.read_text().splitlines()[1:] if r.split("\t")[3] in ROUND_STATUSES)
+    # lane i trains on the job's i-th GPU as Slurm lists them (not necessarily numbered 0, 1, ...)
+    devices = os.environ.get("CUDA_VISIBLE_DEVICES", ",".join(map(str, range(args.lanes)))).split(",")
+    if args.lanes > len(devices):
+        raise SystemExit(f"{args.lanes} lanes but CUDA_VISIBLE_DEVICES={devices}")
+    env = dict(os.environ, CUDA_VISIBLE_DEVICES=devices[lane]) if args.lanes > 1 else None
+    tag = f"[lane {lane}] " if args.lanes > 1 else ""
+    done = sum(1 for r in tsv_rows(repo) if r.split("\t")[3] in ROUND_STATUSES)
 
-    def record(commit: str, s: dict, status: str, desc: str) -> None:
+    def record(commit: str, s: dict, status: str, desc: str, parent: str = "") -> None:
         with tsv.open("a") as f:
             f.write(f"{commit}\t{s.get('val_bpb', 0.0):.6f}\t{s.get('peak_vram_mb', 0.0) / 1024:.1f}\t{status}\t"
                     f"{desc.replace(chr(9), ' ')}\n")
         with (repo / "runs.jsonl").open("a") as f:
-            f.write(json.dumps({"commit": commit, "status": status, "description": desc, **s}) + "\n")
+            f.write(json.dumps({"commit": commit, "status": status, "description": desc, "lane": lane,
+                                "parent": parent, **s}) + "\n")
+
+    def train() -> tuple[dict, str]:
+        return run_train(repo, args.python, args.timeout, env)
 
     def best_mean(commit: str) -> float:
         return mean(runs_by_commit(tsv.read_text()).get(commit, []))
 
     best_commit = git(repo, "rev-parse", "--short=7", "HEAD")
     best = best_mean(best_commit) if args.confirm else min(
-        (float(r.split("\t")[1]) for r in tsv.read_text().splitlines()[1:] if r.split("\t")[3] == "keep"),
-        default=float("inf"))
+        (float(r.split("\t")[1]) for r in tsv_rows(repo) if r.split("\t")[3] == "keep"), default=float("inf"))
     if done == 0:
-        s, tail = run_train(repo, args.python, args.timeout)
+        s, tail = train()
         if "val_bpb" not in s:
-            raise SystemExit(f"baseline run failed:\n{tail}")
+            raise SystemExit(f"{tag}baseline run failed:\n{tail}")
         record(best_commit, s, "keep", "baseline")
         best, done = s["val_bpb"], 1
-        print(f"baseline val_bpb {best:.6f}", flush=True)
+        with shared.lock:
+            if best_commit not in shared.pool:
+                shared.pool.append(best_commit)
+        print(f"{tag}baseline val_bpb {best:.6f}", flush=True)
         for i in range(args.noise_runs):
-            s, _ = run_train(repo, args.python, args.timeout)
+            s, _ = train()
             record(best_commit, s, "noise", f"baseline repeat {i + 1}")
             done += 1
-            print(f"baseline repeat {i + 1}: val_bpb {s.get('val_bpb', 0):.6f}", flush=True)
+            print(f"{tag}baseline repeat {i + 1}: val_bpb {s.get('val_bpb', 0):.6f}", flush=True)
         if args.confirm:
             best = best_mean(best_commit)
-    tried = {r.split("\t")[4] for r in tsv.read_text().splitlines()[1:]}
 
     note = ""
     while done < args.rounds and not (args.hours and time.time() - t0 > args.hours * 3600):
+        with shared.lock:
+            parent = pick_parent(rng, best_commit, list(shared.pool), args.pool_prob)
+        if parent != best_commit:  # edit a commit kept elsewhere; the lane's best stays the yardstick
+            git(repo, "checkout", "-q", parent, "--", "train.py")
         source = (repo / "train.py").read_text()
-        exchange: dict = {"round": done, "proposer": args.proposer, "best_before": best}
-        answer = (llm_propose(args, program, source, tsv.read_text(), note) if args.proposer == "llm"
+        exchange: dict = {"round": done, "lane": lane, "parent": parent, "proposer": args.proposer,
+                          "best_before": best}
+        with shared.lock:
+            tried = set(shared.tried)
+        answer = (llm_propose(args, program, source, shared.results(), note) if args.proposer == "llm"
                   else random_propose(rng, source, tried))
         if answer is None:
-            print("random search space exhausted", flush=True)
+            print(f"{tag}random search space exhausted", flush=True)
             break
         exchange["answer"] = answer
         try:
             desc, blocks = parse(answer)
             new_source = apply(source, blocks)
         except EditError as e:
-            record(best_commit, {}, "invalid", f"{e}")
+            record(best_commit, {}, "invalid", f"{e}", parent)
+            git(repo, "reset", "-q", "--hard", best_commit)
             note = f"Your previous answer could not be applied: {e}. Copy SEARCH text exactly from the file.\n\n"
             exchange["status"] = "invalid"
+            (rounds_dir / f"{done:03d}.json").write_text(json.dumps(exchange, indent=1))
+            done += 1
+            continue
+        key = tuple(change_key(source, new_source))
+        with shared.lock:
+            repeat = key in shared.changes
+            shared.changes.add(key)
+            shared.tried.add(desc)
+        exchange["change"] = list(key)
+        if repeat:  # the same lines changed the same way as an earlier experiment: not trained again
+            record(best_commit, {}, "duplicate", desc, parent)
+            git(repo, "reset", "-q", "--hard", best_commit)
+            note = (f"Your last proposal ({desc}) makes exactly the change of an earlier experiment, so it was not "
+                    "run. Propose something that has not been tried.\n\n")
+            exchange["status"] = "duplicate"
             (rounds_dir / f"{done:03d}.json").write_text(json.dumps(exchange, indent=1))
             done += 1
             continue
         (repo / "train.py").write_text(new_source)
         git(repo, "commit", "-qam", desc or "experiment")
         commit = git(repo, "rev-parse", "--short=7", "HEAD")
-        s, tail = run_train(repo, args.python, args.timeout)
+        s, tail = train()
         if "val_bpb" not in s and args.proposer == "llm":  # one repair attempt
-            fix = llm_propose(args, program, new_source, tsv.read_text(),
+            fix = llm_propose(args, program, new_source, shared.results(),
                               f"Your last change crashed. End of the log:\n```\n{tail}\n```\nFix the crash with "
                               "SEARCH/REPLACE blocks; keep the idea.\n\n")
             exchange["repair"] = fix
@@ -275,7 +354,7 @@ def main() -> None:
                 (repo / "train.py").write_text(apply(new_source, fb))
                 git(repo, "commit", "-qam", f"fix: {desc}")
                 commit = git(repo, "rev-parse", "--short=7", "HEAD")
-                s, tail = run_train(repo, args.python, args.timeout)
+                s, tail = train()
             except EditError:
                 pass
         row_desc = desc
@@ -287,14 +366,14 @@ def main() -> None:
         elif s["val_bpb"] >= best - args.screen_sd * (sd or 0.0):
             status = "discard"
         else:  # the screen passed: train the candidate and the best alternately
-            record(commit, s, "screen", desc)
+            record(commit, s, "screen", desc, parent)
             cand, base = [s["val_bpb"]], []
             for _ in range(args.confirm):
                 for c, vals, st, d in ((best_commit, base, "recheck", f"best again, alongside: {desc}"),
                                        (commit, cand, "confirm", desc)):
                     git(repo, "checkout", "-q", c, "--", "train.py")
-                    r, tail = run_train(repo, args.python, args.timeout)
-                    record(c, r, st, d)
+                    r, tail = train()
+                    record(c, r, st, d, parent)
                     if "val_bpb" in r:
                         vals.append(r["val_bpb"])
             sd = pooled_sd(runs_by_commit(tsv.read_text()))
@@ -305,12 +384,13 @@ def main() -> None:
                         f"alongside; margin {margin:.6f}")
             exchange["confirm"] = {"candidate": cand, "best": base, "sd": sd, "margin": margin}
             s = {"val_bpb": mean(cand), "peak_vram_mb": s.get("peak_vram_mb", 0.0)}
-        record(commit, s, status, row_desc)
-        tried.add(desc)
+        record(commit, s, status, row_desc, parent)
         exchange.update({"description": desc, "commit": commit, "summary": s, "status": status,
                          "diff": git(repo, "diff", f"{best_commit}..{commit}", "--", "train.py")})
         if status in ("keep", "kept"):
             best_commit = commit
+            with shared.lock:
+                shared.pool.append(commit)
         else:
             git(repo, "reset", "-q", "--hard", best_commit)
         if args.confirm:
@@ -322,8 +402,54 @@ def main() -> None:
             note += f" Its first run beat the best, so it was trained again alternating with the best: {row_desc}."
         note += "\n\n"
         (rounds_dir / f"{done:03d}.json").write_text(json.dumps(exchange, indent=1))
-        print(f"round {done}: {status} {s.get('val_bpb', 0):.6f} (best {best:.6f}) {desc}", flush=True)
+        print(f"{tag}round {done}: {status} {s.get('val_bpb', 0):.6f} (best {best:.6f}) {desc}", flush=True)
         done += 1
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--repo", type=Path, required=True, help="autoresearch checkout on the run's branch")
+    ap.add_argument("--python", required=True, help="interpreter of the env that runs train.py")
+    ap.add_argument("--program", type=Path, default=Path(__file__).with_name("program.md"))
+    ap.add_argument("--proposer", choices=["llm", "random"], required=True)
+    ap.add_argument("--llm-url", default="http://127.0.0.1:8000")
+    ap.add_argument("--llm-model", default="qwen3.6")
+    ap.add_argument("--temperature", type=float, default=0.7)
+    ap.add_argument("--max-tokens", type=int, default=12000)
+    ap.add_argument("--rounds", type=int, default=15, help="rounds per lane")
+    ap.add_argument("--hours", type=float, default=0, help="stop starting new rounds after this long (0 = no limit)")
+    ap.add_argument("--timeout", type=int, default=600)
+    ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--noise-runs", type=int, default=0, help="extra runs of the unchanged baseline (new run only)")
+    ap.add_argument("--min-gain", type=float, default=0.0, help="keep only if val_bpb < best - min_gain")
+    ap.add_argument("--confirm", type=int, default=0, help="re-runs of a candidate that passes the screen (0: one run)")
+    ap.add_argument("--screen-sd", type=float, default=1.0,
+                    help="with --confirm: standard deviations below the best's mean the first run must be")
+    ap.add_argument("--lanes", type=int, default=1, help="lanes run in parallel, lane i on CUDA device i")
+    ap.add_argument("--pool-prob", type=float, default=0.0,
+                    help="chance that a round edits a commit kept in any lane instead of its own lane's best")
+    args = ap.parse_args()
+
+    repos = [args.repo] + [ensure_worktree(args.repo, i) for i in range(1, args.lanes)]
+    shared, program, t0 = Shared(repos), args.program.read_text(), time.time()
+    if args.lanes == 1:
+        run_lane(args, 0, repos[0], shared, program, t0)
+        return
+    errors: list[BaseException] = []
+
+    def lane_main(i: int) -> None:
+        try:
+            run_lane(args, i, repos[i], shared, program, t0)
+        except BaseException as e:  # noqa: BLE001 - reported after the other lane finishes
+            errors.append(e)
+
+    threads = [threading.Thread(target=lane_main, args=(i,)) for i in range(args.lanes)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    if errors:
+        raise errors[0]
 
 
 if __name__ == "__main__":

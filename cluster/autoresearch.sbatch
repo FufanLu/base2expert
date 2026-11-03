@@ -19,6 +19,11 @@
 # deviations twice, alternating with the best, before keeping it (agent.py).
 # HOURS=1.3 leaves 42 minutes, enough for a round started at 1.3 h to finish
 # its 5 runs.
+# LANES=2 (with --gres=gpu:h200:2) runs two lanes at once, lane i on the job's i-th GPU, each
+# with its own baseline and keep rule; POOL_PROB is the chance a round edits a commit kept in
+# either lane instead of its lane's best (agent.py). vLLM stays on the first GPU.
+#   TAG=nov03-llm2 PROPOSER=llm LANES=2 POOL_PROB=0.3 NOISE_RUNS=2 CONFIRM=2 MIN_GAIN=0.001 \
+#     sbatch --gres=gpu:h200:2 cluster/autoresearch.sbatch
 #   TAG=oct25-llm PROPOSER=llm ROUNDS=40 NOISE_RUNS=2 MIN_GAIN=0.002 sbatch cluster/autoresearch.sbatch
 #   TAG=oct31-llm PROPOSER=llm NOISE_RUNS=2 CONFIRM=2 MIN_GAIN=0.001 sbatch cluster/autoresearch.sbatch
 set -euo pipefail
@@ -49,7 +54,8 @@ if [ "$PROPOSER" = llm ]; then
   # holds 750, below the default 1,024, and vLLM refused (11377316). The
   # researcher sends one request at a time.
   PORT=$((20000 + SLURM_JOB_ID % 20000))
-  "$TR_PY" -P -m vllm.entrypoints.openai.api_server --model "$MODEL" --served-model-name qwen3.6 \
+  IFS=, read -ra DEV <<< "${CUDA_VISIBLE_DEVICES:-0}"
+  CUDA_VISIBLE_DEVICES=${DEV[0]} "$TR_PY" -P -m vllm.entrypoints.openai.api_server --model "$MODEL" --served-model-name qwen3.6 \
     --host 127.0.0.1 --port "$PORT" --gpu-memory-utilization 0.62 --max-model-len 40960 --max-num-seqs 4 \
     --enable-prefix-caching >"$LOGS/ar_vllm_$SLURM_JOB_ID.log" 2>&1 &
   VLLM_PID=$!
@@ -62,5 +68,5 @@ fi
 "$TR_PY" -P "$CODE/pretrain/autoresearch/agent.py" --repo "$RUN" --python "$NC_PY" --proposer "$PROPOSER" \
   ${URL:+--llm-url "$URL"} --rounds "$ROUNDS" --hours "$HOURS" --seed "${SEED:-0}" \
   --noise-runs "${NOISE_RUNS:-0}" --min-gain "${MIN_GAIN:-0}" --confirm "${CONFIRM:-0}" \
-  --screen-sd "${SCREEN_SD:-1}" 2>&1 | tee -a "$LOGS/ar_$TAG.log"
-log "stretch done: $(($(wc -l <"$RUN/results.tsv") - 1)) rows in results.tsv"
+  --screen-sd "${SCREEN_SD:-1}" --lanes "${LANES:-1}" --pool-prob "${POOL_PROB:-0}" 2>&1 | tee -a "$LOGS/ar_$TAG.log"
+for d in "$RUN" "$RUN"-lane*; do [ -f "$d/results.tsv" ] && log "stretch done: $(($(wc -l <"$d/results.tsv") - 1)) rows in $d/results.tsv"; done

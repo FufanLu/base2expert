@@ -24,8 +24,15 @@ You see the current `train.py` (the best version so far) and `results.tsv`: one 
 kept change), `noise` (the unchanged baseline trained again, to measure run-to-run noise), `discard`,
 `crash`, `invalid` (the edit could not be applied); and for a change whose first run looked better,
 `screen` (that first run), `confirm` (the change trained again), `recheck` (the best version trained again
-alongside it), then one decision row, `kept` or `rejected`, with the change's mean. Propose **one**
-experiment: one idea, so that its effect can be read from its runs.
+alongside it), then one decision row, `kept` or `rejected`, with the change's mean; `duplicate` marks a
+proposal that changed exactly the lines an earlier experiment changed, which is not trained again.
+Propose **one** experiment: one idea, so that its effect can be read from its runs.
+
+Two lanes may run at once, one per GPU, each with its own results table (`# lane 0`, `# lane 1`). The
+`train.py` you see is the version this round edits: usually your lane's best, sometimes a version kept
+in the other lane. val_bpb is comparable only within a lane: the GPUs differ in speed (lane 0's also
+serves you), and a fixed 5-minute budget turns speed into steps. Use the other lane's rows for ideas,
+not for numbers.
 
 The script then commits your change and trains it. Two runs of the same code differ (the budget is
 wall-clock, so the number of steps varies), so a change is kept only if it beats the best by more than

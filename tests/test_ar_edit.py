@@ -124,3 +124,59 @@ def test_loop_with_confirm_keeps_a_real_gain_only_after_reruns(tmp_path, monkeyp
                           capture_output=True, text=True).stdout == ""
     runs = (repo / "runs.jsonl").read_text().splitlines()
     assert len(runs) == len(rows) and json.loads(runs[0])["val_bpb"] == 1.0
+
+
+def test_two_lanes_share_the_pool_and_never_train_a_change_twice(tmp_path, monkeypatch):
+    import json
+    import subprocess
+
+    import agent
+
+    # the stand-in train.py of the test above, reading the noise sequence of its own GPU
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    for dev in ("3", "5"):  # the job's GPUs need not be numbered 0, 1
+        (tmp_path / f"noise.json.{dev}").write_text(json.dumps([0.0, 0.001, -0.001] * 30))
+    (repo / "train.py").write_text(
+        "MATRIX_LR = 0.04  # learning rate\n"
+        "import json, os, pathlib\n"
+        "p = pathlib.Path(os.environ['AR_TEST_NOISE'] + '.' + os.environ['CUDA_VISIBLE_DEVICES'])\n"
+        "seq = json.loads(p.read_text())\n"
+        "x = seq.pop(0)\n"
+        "p.write_text(json.dumps(seq))\n"
+        "print('---')\n"
+        "print(f'val_bpb: {1.0 - (0.01 if MATRIX_LR > 0.05 else 0.0) + x:.6f}')\n"
+        "print('peak_vram_mb: 1000.0')\n")
+    for cmd in (["init", "-q", "-b", "autoresearch/t"], ["config", "user.email", "t@t"], ["config", "user.name", "t"],
+                ["add", "train.py"], ["commit", "-qm", "base"]):
+        subprocess.run(["git", "-C", str(repo), *cmd], check=True)
+    monkeypatch.setenv("AR_TEST_NOISE", str(tmp_path / "noise.json"))
+    monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "3,5")
+    monkeypatch.setattr(sys, "argv", ["agent.py", "--repo", str(repo), "--python", sys.executable,
+                                      "--proposer", "random", "--rounds", "6", "--noise-runs", "2",
+                                      "--confirm", "2", "--min-gain", "0.001", "--lanes", "2", "--pool-prob", "0.5"])
+    agent.main()
+
+    lane1 = tmp_path / "repo-lane1"
+    branch = subprocess.run(["git", "-C", str(lane1), "rev-parse", "--abbrev-ref", "HEAD"], capture_output=True,
+                            text=True).stdout.strip()
+    assert branch == "autoresearch/t-lane1"
+    trained = []
+    for lane, d in ((0, repo), (1, lane1)):
+        status = [r.split("\t")[3] for r in (d / "results.tsv").read_text().splitlines()[1:]]
+        assert status[:3] == ["keep", "noise", "noise"]  # each lane measures its own GPU's baseline
+        runs = [json.loads(x) for x in (d / "runs.jsonl").read_text().splitlines()]
+        assert {r["lane"] for r in runs} == {lane}
+        for f in sorted((d / "rounds").glob("*.json")):
+            ex = json.loads(f.read_text())
+            if ex.get("status") not in ("duplicate", "invalid"):
+                trained.append(tuple(ex["change"]))
+    assert len(trained) == len(set(trained))  # no change trained twice, in either lane
+    kept = [r for d in (repo, lane1) for r in (d / "results.tsv").read_text().splitlines()[1:]
+            if r.split("\t")[3] == "kept"]
+    # what is kept raises MATRIX_LR above 0.05, whichever commit (lane) it started from: the pool lets a
+    # lane edit the other lane's kept commit, and thread timing decides which, so only the value is checked
+    import re
+    assert kept and all(float(re.search(r"-> ([0-9.e-]+)", r).group(1)) > 0.05 for r in kept)
+    # each GPU's noise sequence was consumed by its own lane only
+    assert all(len(json.loads((tmp_path / f"noise.json.{dev}").read_text())) < 90 for dev in ("3", "5"))
