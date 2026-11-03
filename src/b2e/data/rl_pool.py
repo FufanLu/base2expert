@@ -60,20 +60,33 @@ def wrong_majority(answers: Sequence[str | None], scores: Sequence[float], finis
     return max(counts, default=0) > right
 
 
+def mixed_finished(scores: Sequence[float], finish: Sequence[str]) -> bool:
+    """True if the samples that finished (not cut at the length limit) are both right and wrong.
+
+    A cut sample has no answer, so it says nothing about the problem: in the RSI pilot 286 of
+    the 398 problems in the pass-rate range were there only because some samples were cut,
+    their finished samples all right (F#89)."""
+    done = [s for s, f in zip(scores, finish, strict=True) if f == "stop"]
+    return any(s >= 1 - 1e-9 for s in done) and any(s < 1 - 1e-9 for s in done)
+
+
 def select(pool: pd.DataFrame, rates: pd.DataFrame, low: float, high: float, unequal: bool = False,
-           majority: bool = False) -> pd.DataFrame:
+           majority: bool = False, finished: bool = False) -> pd.DataFrame:
     """Rows of pool whose (data_source, id) has a pass rate in [low, high].
 
     With unequal, the rows whose k scores are not all equal instead: the condition for a
     nonzero group advantage. For a 0/1 reward these are the prompts with a pass rate in
     [1/k, 1 - 1/k], [0.1, 0.9] at k = 8; a graded reward keeps more (CAIL term in the P7
     pilot, 11527721: 232 of 300 prompts against 147 by the pass rate at score 1). With
+    finished, the range must also hold among the finished samples (mixed_finished). With
     majority, prompts where a wrong answer outvotes the gold (wrong_majority) are dropped.
     """
     if unequal:
         keep = rates[rates["scores"].map(lambda s: max(s) > min(s))]
     else:
         keep = rates[(rates["pass_rate"] >= low) & (rates["pass_rate"] <= high)]
+    if finished:
+        keep = keep[[mixed_finished(s, f) for s, f in zip(keep["scores"], keep["finish"], strict=True)]]
     if majority:
         out = [wrong_majority(a, s, f) for a, s, f in zip(keep["answers"], keep["scores"], keep["finish"], strict=True)]
         keep = keep[[not x for x in out]]
@@ -91,6 +104,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                     help="keep prompts whose k scores are not all equal instead of --low/--high (P7: graded rewards)")
     ap.add_argument("--majority", action="store_true",
                     help="drop prompts where one wrong numeric answer outvotes the gold (P7.5: self-made problems)")
+    ap.add_argument("--finished", action="store_true",
+                    help="also require right and wrong among the finished samples, a cut counting as no answer (P7.5)")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--val", nargs="+", required=True, help="validation parquet files, listed as they are")
     ap.add_argument("--train", nargs="+", required=True, help="train parquet files to select from")
@@ -103,11 +118,12 @@ def main() -> None:
     rates = pd.read_parquet(args.passrate)
     args.out.mkdir(parents=True, exist_ok=True)
     rule = {"unequal": True} if args.unequal else {"low": args.low, "high": args.high}
-    summary: dict = {"passrate": args.passrate, **rule, "majority": args.majority, "sources": {}}
+    summary: dict = {"passrate": args.passrate, **rule, "majority": args.majority, "finished": args.finished,
+                     "sources": {}}
     listed = []
     for f in args.train:
         pool = pd.read_parquet(f)
-        kept = select(pool, rates, args.low, args.high, args.unequal, args.majority)
+        kept = select(pool, rates, args.low, args.high, args.unequal, args.majority, args.finished)
         dst = args.out / (Path(f).stem + "_pool.parquet")
         kept.to_parquet(dst, index=False)
         listed.append(str(dst))
