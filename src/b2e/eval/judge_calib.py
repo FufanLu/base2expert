@@ -19,7 +19,10 @@ import random
 from collections import Counter
 from pathlib import Path
 
+from b2e.prompts import fits
 from b2e.reward.rubric import f1_balanced, grader_messages, judge_pairs, load_jsonl, parse_verdict, physician_pairs
+
+MAX_MODEL_LEN = 16384
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -39,9 +42,15 @@ def main(argv: list[str] | None = None) -> None:
     rows = load_jsonl(args.meta)
     rng = random.Random(args.seed)
     sample = rng.sample(rows, min(args.n, len(rows)))
+    llm = LLM(model=args.judge, gpu_memory_utilization=0.9, max_model_len=MAX_MODEL_LEN, enable_prefix_caching=True)
+    tok = llm.get_tokenizer()
     msgs = [grader_messages(list(r["prompt"]) + [{"role": "assistant", "content": r["completion"]}], r["rubric"])
             for r in sample]
-    llm = LLM(model=args.judge, gpu_memory_utilization=0.9, max_model_len=16384, enable_prefix_caching=True)
+    # a prompt over the context would end the whole batch (F#31): such rows are left out and counted
+    ok = [fits(tok, m, args.thinking, args.max_tokens, MAX_MODEL_LEN) for m in msgs]
+    too_long = len(ok) - sum(ok)
+    sample = [r for r, k in zip(sample, ok, strict=True) if k]
+    msgs = [m for m, k in zip(msgs, ok, strict=True) if k]
     sp = SamplingParams(temperature=0.6, top_p=0.95, max_tokens=args.max_tokens, seed=args.seed)
     outs = llm.chat(msgs, sp, chat_template_kwargs={"enable_thinking": args.thinking})
     texts = [o.outputs[0].text for o in outs]
@@ -58,7 +67,7 @@ def main(argv: list[str] | None = None) -> None:
     pd.DataFrame({"rubric": [r["rubric"] for r in sample], "category": [str(r.get("category", "")) for r in sample],
                   "labels": [list(r["binary_labels"]) for r in sample], "verdict": verdicts, "text": texts,
                   "tokens": [len(o.outputs[0].token_ids) for o in outs]}).to_parquet(args.out / "verdicts.parquet")
-    summary = {"rows_total": len(rows), "graded": len(sample), "thinking": args.thinking,
+    summary = {"rows_total": len(rows), "graded": len(sample), "too_long": too_long, "thinking": args.thinking,
                "no_verdict": sum(v is None for v in verdicts), "verdicts": dict(Counter(map(str, verdicts))),
                "judge_vs_physicians": judge, "physicians_vs_each_other": doctors, "by_category": by_cat}
     (args.out / "summary.json").write_text(json.dumps(summary, indent=2))

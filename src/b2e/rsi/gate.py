@@ -14,6 +14,7 @@ under the finance verifier, so the gold has a second, independent derivation.
   invalid    \\boxed{INVALID}: missing, contradictory or ambiguous
   no_box     closed its thinking but gave no box
   unclosed   cut inside its thinking
+  too_long   the prompt does not fit the context; not graded
 
     python -P -m b2e.rsi.gate --judge /tmp/b2e-models/Qwen3.6-35B-A3B \\
         --problems $B2E_ROOT/data/rsi/round1/problems.parquet --out $B2E_ROOT/data/rsi/round1
@@ -26,6 +27,7 @@ import json
 from collections import Counter
 from pathlib import Path
 
+from b2e.prompts import fits
 from b2e.reward.numeric import extract_boxed
 from b2e.reward.score import compute_score
 from b2e.rsi.docs import split_prompt
@@ -72,13 +74,19 @@ def main(argv: list[str] | None = None) -> None:
     rows = df.to_dict("records")
     llm = LLM(model=args.judge, gpu_memory_utilization=0.9, max_model_len=16384, enable_prefix_caching=True)
     sp = SamplingParams(temperature=args.temperature, top_p=args.top_p, max_tokens=args.max_tokens, seed=args.seed)
-    outs = llm.chat([gate_messages(r) for r in rows], sp, chat_template_kwargs={"enable_thinking": True})
-    texts = [o.outputs[0].text for o in outs]
-    verdicts = [verdict(t, r["reward_model"]["ground_truth"]) for t, r in zip(texts, rows, strict=True)]
+    msgs = [gate_messages(r) for r in rows]
+    tok = llm.get_tokenizer()
+    ok = [fits(tok, m, True, args.max_tokens, 16384) for m in msgs]  # one too long would end the batch (F#31)
+    outs = iter(llm.chat([m for m, k in zip(msgs, ok, strict=True) if k], sp, chat_template_kwargs={"enable_thinking": True}))
+    graded = [next(outs) if k else None for k in ok]
+    texts = [o.outputs[0].text if o is not None else "" for o in graded]
+    verdicts = [verdict(t, r["reward_model"]["ground_truth"]) if o is not None else "too_long"
+                for t, r, o in zip(texts, rows, graded, strict=True)]
     args.out.mkdir(parents=True, exist_ok=True)
     pd.DataFrame({
         "id": [r["extra_info"]["id"] for r in rows], "verdict": verdicts, "box": [extract_boxed(t) for t in texts],
-        "tokens": [len(o.outputs[0].token_ids) for o in outs], "finish": [o.outputs[0].finish_reason for o in outs],
+        "tokens": [len(o.outputs[0].token_ids) if o is not None else 0 for o in graded],
+        "finish": [o.outputs[0].finish_reason if o is not None else "too_long" for o in graded],
         "text": texts,
     }).to_parquet(args.out / "gate.parquet", index=False)
     df[[v == "valid" for v in verdicts]].to_parquet(args.out / "problems_gated.parquet", index=False)
