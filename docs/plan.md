@@ -176,12 +176,17 @@ questions in documents):
    it independently; a problem is kept only if the judge calls it valid and
    its answer matches the program's. The judge is external, not the solver's
    own majority.
-3. Semantic dedup: a frozen model judges whether two problems are the same
-   task (lexical dedup misses rephrasings), then decontamination, then the
-   10-90 % filter with a cut answer counted as no answer (F#89).
-4. The pilot audits' cheap fixes stay: 4 significant digits in the program's
-   output, "percentage change" vs "percentage points" and the sign of a change
-   defined in the prompt, a larger cap for a thinking proposer.
+3. Dedup by meaning: as built (bd129ca), two problems on the same excerpt
+   with the same answer (or one in percent) are the same task, and a problem
+   repeating one of the dataset's own answers on its excerpt is dropped; a
+   frozen-model pair judge, the first idea, is not needed once problems are
+   grounded (problems on different excerpts use different figures). Then
+   decontamination, then the 10-90 % filter with a cut answer counted as no
+   answer (F#89, `rl_pool --finished`).
+4. The pilot audits' cheap fixes stay: the program prints its unrounded result
+   (FinQA's own gold convention; this replaces "4 significant digits"),
+   "percentage change" vs "percentage points" and the sign of a change defined
+   in the prompt, a larger cap (8,192) for a thinking proposer.
 5. Each round, 20 kept problems are read by hand, giving the flawed share per
    round.
 
