@@ -67,6 +67,16 @@ Short smoke jobs, mostly on `gpu-short`.
 - Baselines: the default config, and random search with the same number of
   trials (LR, warmdown, data mix).
 - The best change found is carried to the d20 run.
+- Upgrade (2026-11-03, the user's choice after the review in docs/runs.md):
+  - two trials at a time, one on each of a gpu-short job's two GPUs, so a
+    stretch gets about twice the trials (14 per 1.3 h on one GPU were too few
+    against the node's noise, 11378056; SkyPilot's 16-GPU run screened in
+    parallel waves of 10-13 and confirmed the best);
+  - a candidate pool instead of one greedy chain: the researcher edits a
+    parent drawn from the archive of trained commits (ShinkaEvolve-style
+    parent sampling, with a novelty check that rejects a proposal repeating an
+    earlier one), not always the current best;
+  - the keep rule stays `--confirm` (screen, then re-run against the best).
 
 ## P3 M0 mid-training
 
@@ -98,10 +108,21 @@ Short smoke jobs, mostly on `gpu-short`.
   - safety gate.
 - Rubric judge (Qwen3.6-35B-A3B on SGLang, separate GPU job, HTTP). Its
   agreement with HealthBench physician grades is reported.
-- Bradley-Terry reward model (TRL), scored on RewardBench 2 and held-out
-  domain pairs.
+- ~~Bradley-Terry reward model (TRL), scored on RewardBench 2 and held-out
+  domain pairs.~~ Dropped 2026-11-03: Kimi K3's post-training (2026-07) has no
+  separate reward-model or DPO stage and scores non-verifiable tasks with a
+  generative judge. The rubric judge follows its protocol instead:
+  - a rubric per prompt (RaR-Medicine's own where the prompt has one, else
+    written by the judge for that prompt);
+  - each candidate scored against it, and the group's candidates compared in
+    pairs (a tournament), which gives the group reward;
+  - a candidate over a verbosity limit loses its comparison, so length does
+    not buy reward;
+  - used as the reward for medicine's open prompts (P7) only after its
+    agreement with HealthBench physician grades is measured.
 - DPO vs SimPO vs KTO vs ORPO from S-fin, on S-fin's own samples paired by
-  verifier or judge.
+  verifier or judge. Done (11-02/03): kept as the offline baseline, not
+  extended.
 
 ## P6 RL algorithms (finance)
 
@@ -118,8 +139,15 @@ Short smoke jobs, mostly on `gpu-short`.
 ## P7 Law and medicine experts
 
 - R-law and R-med with the recipe chosen in P6. R-fin is the best P6 run.
-- Medicine adds RaR-Medicine rubric rewards.
+- Medicine adds RaR-Medicine rubric rewards (the P5 rubric judge).
 - Accuracy-vs-thinking-budget curves.
+- Effort control (2026-11-03, Kimi K3's recipe in place of an L1-style
+  length reward): a low-effort finance teacher, R-fin-low, continued from
+  R-fin. Each prompt's budget is S-fin's (the cold-start model's) length on it
+  from the pool sampling times a multiplier; a rollout over its budget gets
+  reward -1 even when right; the multiplier is annealed down over the run.
+  Its prompts carry a low-effort flag, so P8 can route on it and the student
+  learns two effort levels.
 
 ## P7.5 Model self-improvement loop (recursive self-improvement, model level)
 
@@ -131,6 +159,31 @@ From R-fin, each round:
 2. Dedup and decontaminate; keep problems the model solves 10-90% of the time.
 3. Sample 8 answers per problem and check them against the program's result.
 4. GRPO on the new problems gives the next round's model.
+
+Redesign (2026-11-03, after the pilots' hand audits: 9 of 20 kept no-thinking
+problems flawed, and `--majority` does not catch them because S-fin follows a
+flawed gold; R-Quest (2026-10) reports invalid self-made questions growing over
+rounds and answer-consistency filtering raising their share, CoVerRL (2026-03)
+calls it the consensus trap, DARC (2026-01) and SPICE (2025-10) ground the
+questions in documents):
+
+1. Grounded proposals: the proposer is given a real filing's text and table
+   (FinQA / TAT-QA train documents, or EDGAR 10-K tables from P1) and asks a
+   new question about it; the program reads its numbers from that table, so
+   text and table cannot disagree and no figure is invented.
+2. Validity gate before the pass-rate filter: Qwen3.6-35B-A3B judges whether
+   the question is answerable from the document and unambiguous, and answers
+   it independently; a problem is kept only if the judge calls it valid and
+   its answer matches the program's. The judge is external, not the solver's
+   own majority.
+3. Semantic dedup: a frozen model judges whether two problems are the same
+   task (lexical dedup misses rephrasings), then decontamination, then the
+   10-90 % filter with a cut answer counted as no answer (F#89).
+4. The pilot audits' cheap fixes stay: 4 significant digits in the program's
+   output, "percentage change" vs "percentage points" and the sign of a change
+   defined in the prompt, a larger cap for a thinking proposer.
+5. Each round, 20 kept problems are read by hand, giving the flawed share per
+   round.
 
 - Three rounds.
 - Open-ended prompts use the model as its own judge, compared against the
@@ -145,6 +198,19 @@ From R-fin, each round:
 - MOPD: student S-mix, teachers R-fin / R-law / R-med, routed by
   `data_source`; reverse KL (k3, policy-gradient form). Forward top-k KL is
   optional.
+- Two core comparisons added 2026-11-03 (multi-teacher on-policy
+  distillation is now the consolidation step of DeepSeek-V4, Kimi K3 and
+  MiMo-V2-Flash; the MOPD paper, 2026-06, uses our baselines):
+  - the KL: the sampled per-token reverse KL against a full-vocabulary (or
+    top-k) logit KL, which DeepSeek-V4 is reported to use because the sampled
+    one is noisy; which of the two verl supports at a 248K vocabulary is
+    checked first;
+  - the token budget: plain MOPD against Open-MOPD's (2026-08) token-share
+    balancing and gap-aware allocation across domains. Our domains differ in
+    cap (4,096 law, 8,192 medicine) and answer length, the imbalance it
+    diagnoses; instruction following, the shortest answers, is the one
+    expected to suffer.
+- Teachers include R-fin-low (P7), routed on the effort flag.
 - Baselines:
   - (a) mixed RL from S-mix at equal GPU-hours;
   - (b) TIES / DARE merge;
