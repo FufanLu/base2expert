@@ -1,0 +1,47 @@
+# P8 smoke (docs/runs.md, 11-03): multi-teacher on-policy distillation on two GPUs, the student
+# S-mix on the first (actor + vLLM rollout, as in every P6/P7 run) and three 4B teachers sharing
+# the second (b2e.distill.share_gpu, installed by cluster/mopd.sbatch). Routed by the `teacher`
+# column of b2e.data.mopd_mix. Distillation loss only (no task reward), k3 in policy-gradient
+# form as in the P0 smoke (11346656); MOPD_LOSS / MOPD_PG at submit time change it. A few steps on a
+# small mix: it checks that the three servers come up on one GPU, that every sample reaches its
+# own teacher, and the step time and memory, not what the student learns.
+#   RUN=mopd_smoke STUDENT=s_mix TEACHERS="fin=dapo_fin_step90 law=s_law med=s_med" RL_DATA=mopd_smoke \
+#     sbatch cluster/mopd.sbatch
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+data:
+  train_batch_size: 24
+  max_response_length: 2048
+  val_max_samples: -1
+
+actor_rollout_ref:
+  actor:
+    ppo_mini_batch_size: 8
+  rollout:
+    n: 1
+
+distillation:
+  enabled: true
+  n_gpus_per_node: 1
+  nnodes: 1
+  teacher_key: teacher
+  distillation_loss:
+    loss_mode: k3                # cluster/mopd.sbatch: MOPD_LOSS / MOPD_PG override these
+    use_policy_gradient: true
+    use_task_rewards: false
+    topk: 32
+    loss_max_clamp: 10.0
+    log_prob_min_clamp: -10.0
+
+trainer:
+  experiment_name: mopd_smoke
+  total_training_steps: 4
+  test_freq: 2
+  save_freq: -1
+  val_before_train: true
