@@ -119,7 +119,12 @@ Short smoke jobs, mostly on `gpu-short`.
   - a candidate over a verbosity limit loses its comparison, so length does
     not buy reward;
   - used as the reward for medicine's open prompts (P7) only after its
-    agreement with HealthBench physician grades is measured.
+    agreement with HealthBench physician grades is measured. Measured 11-03
+    (11594995, 3,000 meta-eval rows): class-balanced F1 0.686 against
+    physicians, who reach 0.689 against each other (difference 95 % [−0.021,
+    +0.017]): it passes. It says "met" more often than physicians (83 % vs
+    77 %) and is weaker on emergency-referral and safety items, so it is not the
+    only reward on those.
 - DPO vs SimPO vs KTO vs ORPO from S-fin, on S-fin's own samples paired by
   verifier or judge. Done (11-02/03): kept as the offline baseline, not
   extended.
