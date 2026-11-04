@@ -13,7 +13,9 @@
 #   RUN=mopd_smoke STUDENT=s_mix TEACHERS="fin=dapo_fin_step90 law=s_law med=s_med" RL_DATA=mopd_smoke \
 #     sbatch cluster/mopd.sbatch
 # TEACHERS maps each routing key (the `teacher` column of b2e.data.mopd_mix) to a model dir in
-# $MODELS; each teacher's vLLM gets TEACHER_MEM of the GPU (default 0.27, three to a GPU).
+# $MODELS; each teacher's vLLM gets TEACHER_MEM of the GPU (default 0.27, three to a GPU) and at most
+# TEACHER_SEQS sequences at once (default 256): at 0.27 a teacher has 755 Mamba cache blocks, one per
+# sequence, and vLLM refuses to start when max_num_seqs (verl's default 1,024) is more (11611081).
 # MOPD_LOSS / MOPD_PG pick the loss (k3 / true by default; forward_kl_topk wants PG false), and
 # a top-k loss raises vLLM's max_logprobs to distillation_loss.topk.
 # MOPD_BALANCE=share|gap turns on Open-MOPD's per-domain loss weights (b2e.distill.balance),
@@ -27,6 +29,7 @@ TEACHERS=${TEACHERS:?key=model ...}
 RL_DATA=${RL_DATA:?data dir in $DATA/processed}
 NAME=${NAME:-$RUN}
 TEACHER_MEM=${TEACHER_MEM:-0.27}
+TEACHER_SEQS=${TEACHER_SEQS:-256}
 export B2E_USE_EXT=1
 gpu_info
 stage_env train
@@ -46,7 +49,7 @@ for kv in $TEACHERS; do
   p=+distillation.teacher_models.$key
   tov+=("$p.key=$key" "$p.model_path=$model" "$p.num_replicas=1" "$p.inference.name=vllm"
         "$p.inference.tensor_model_parallel_size=1" "$p.inference.gpu_memory_utilization=$TEACHER_MEM"
-        "$p.inference.max_model_len=$maxlen")
+        "$p.inference.max_num_seqs=$TEACHER_SEQS" "$p.inference.max_model_len=$maxlen")
   case ${MOPD_LOSS:-k3} in *topk*) tov+=("$p.inference.engine_kwargs.vllm.max_logprobs=$topk") ;; esac
   log "teacher $key: $model"
 done
