@@ -6,6 +6,9 @@ b2e.reward.score.compute_score, and writes per-sample records plus a summary.
 --repeats runs the same generation several times (seeds 0..k-1) to measure
 the run-to-run spread, which on 128 GSM8K questions was already 8 points
 between two greedy runs of the same model (docs/runs.md, 11343461/62).
+--budgets B1 B2 ... evaluates with the thinking cut at each budget instead
+(b2e.eval.budget; thinking on, --answer-tokens for the answer after it), one
+entry per set and budget, for the accuracy-vs-budget curves of P7.
 
     python -P -m b2e.eval.run_eval --model /tmp/b2e-models/Qwen3.5-4B-Base-chat \\
         --data finqa_test.parquet tatqa_dev.parquet --out results/base --thinking false --repeats 2
@@ -21,6 +24,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from b2e.eval import budget as budget_forcing
 from b2e.prompts import fits
 from b2e.reward.score import compute_score
 
@@ -37,7 +41,11 @@ def main() -> None:
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--gpu-mem", type=float, default=0.85)
     ap.add_argument("--max-model-len", type=int, default=16384)
+    ap.add_argument("--budgets", type=int, nargs="*", default=[], help="thinking budgets in tokens")
+    ap.add_argument("--answer-tokens", type=int, default=1024, help="the answer's tokens after a budget")
     args = ap.parse_args()
+    if args.budgets and args.thinking != "true":
+        ap.error("--budgets needs --thinking true")
 
     from vllm import LLM, SamplingParams
 
@@ -46,30 +54,41 @@ def main() -> None:
     llm = LLM(model=args.model, gpu_memory_utilization=args.gpu_mem, max_model_len=args.max_model_len,
               enable_prefix_caching=True)
     summary = {"model": args.model, "thinking": args.thinking, "temperature": args.temperature, "sets": {}}
-    for path in args.data:
+    # (path, budget): budget None is the usual generation with --max-tokens
+    jobs = [(p, b) for p in args.data for b in (args.budgets or [None])]
+    for path, budget in jobs:
         df = pd.read_parquet(path)
         if args.limit:
             df = df.head(args.limit)
-        name = Path(path).stem
+        name = Path(path).stem + (f"@b{budget}" if budget else "")
         tok = llm.get_tokenizer()
-        ok = [fits(tok, list(p), args.thinking == "true", args.max_tokens, args.max_model_len) for p in df["prompt"]]
+        max_new = budget + args.answer_tokens if budget else args.max_tokens
+        ok = [fits(tok, list(p), args.thinking == "true", max_new, args.max_model_len) for p in df["prompt"]]
         skipped = len(ok) - sum(ok)
         df = df[ok]
         msgs = [list(p) for p in df["prompt"]]
         accs, runs = [], []
         for r in range(args.repeats):
-            sp = SamplingParams(temperature=args.temperature, max_tokens=args.max_tokens, seed=r)
             t0 = time.time()
-            res = llm.chat(msgs, sp, chat_template_kwargs={"enable_thinking": args.thinking == "true"})
+            if budget:
+                gens = budget_forcing.generate(llm, msgs, budget, args.answer_tokens, args.temperature, seed=r)
+            else:
+                sp = SamplingParams(temperature=args.temperature, max_tokens=args.max_tokens, seed=r)
+                res = llm.chat(msgs, sp, chat_template_kwargs={"enable_thinking": args.thinking == "true"})
+                gens = [{"text": o.outputs[0].text, "tokens": len(o.outputs[0].token_ids),
+                         "finish": o.outputs[0].finish_reason} for o in res]
             dt = time.time() - t0
             recs = []
-            for row, o in zip(df.itertuples(index=False), res, strict=True):
-                text = o.outputs[0].text
+            for row, g in zip(df.itertuples(index=False), gens, strict=True):
+                text = g["text"]
                 score = compute_score(row.data_source, text, row.reward_model["ground_truth"],
                                       thinking=args.thinking == "true")
+                extra = ({k: g[k] for k in ("thinking_tokens", "answer_tokens", "forced", "cut_by_budget")}
+                         if budget else {})
                 recs.append({"data_source": row.data_source, "id": row.extra_info.get("id"),
-                             "score": score, "boxed": "\\boxed{" in text, "tokens": len(o.outputs[0].token_ids),
-                             "finish": o.outputs[0].finish_reason, "response": text})
+                             "score": score, "boxed": "\\boxed{" in text,
+                             "tokens": g.get("tokens", g.get("thinking_tokens", 0) + g.get("answer_tokens", 0)),
+                             "finish": g["finish"], "response": text, **extra})
             with (out / f"{name}.run{r}.jsonl").open("w") as f:
                 for rec in recs:
                     f.write(json.dumps(rec, ensure_ascii=False) + "\n")
@@ -86,8 +105,10 @@ def main() -> None:
                          # it on every finance answer after mid-training on thinking-only chats)
                          "reopened_think": round(sum("<think>" in x["response"] for x in recs) / len(recs), 4),
                          "truncated": sum(x["finish"] == "length" for x in recs), "seconds": round(dt, 1)})
+            if budget:  # how often the budget, not the model, ended the thinking
+                runs[-1]["forced_rate"] = round(sum(x["forced"] for x in recs) / len(recs), 4)
             print(name, f"run {r}", runs[-1], flush=True)
-        summary["sets"][name] = {"n": len(df), "skipped_too_long": skipped, "runs": runs,
+        summary["sets"][name] = {"n": len(df), "skipped_too_long": skipped, "budget": budget, "runs": runs,
                                  "accuracy_mean": round(statistics.mean(accs), 4),
                                  "accuracy_spread": round(max(accs) - min(accs), 4)}
     (out / "summary.json").write_text(json.dumps(summary, indent=2))
