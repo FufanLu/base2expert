@@ -15,7 +15,10 @@
 # TEACHERS maps each routing key (the `teacher` column of b2e.data.mopd_mix) to a model dir in
 # $MODELS; each teacher's vLLM gets TEACHER_MEM of the GPU (default 0.27, three to a GPU).
 # MOPD_LOSS / MOPD_PG pick the loss (k3 / true by default; forward_kl_topk wants PG false), and
-# a top-k loss raises vLLM's max_logprobs to distillation_loss.topk. LEG_STEPS as in rl.sbatch.
+# a top-k loss raises vLLM's max_logprobs to distillation_loss.topk.
+# MOPD_BALANCE=share|gap turns on Open-MOPD's per-domain loss weights (b2e.distill.balance),
+# which need verl's per-token clamp off (the patch clamps before weighting). LEG_STEPS as in
+# rl.sbatch.
 set -euo pipefail
 source "${B2E_CODE:-/scratch/$USER/b2e/code}/cluster/common.sh"
 RUN=${RUN:?config name in configs/rl}
@@ -50,6 +53,11 @@ done
 loss=()
 [ -n "${MOPD_LOSS:-}" ] && loss+=("distillation.distillation_loss.loss_mode=$MOPD_LOSS")
 [ -n "${MOPD_PG:-}" ] && loss+=("distillation.distillation_loss.use_policy_gradient=$MOPD_PG")
+if [ -n "${MOPD_BALANCE:-}" ]; then
+  export B2E_MOPD_BALANCE=$MOPD_BALANCE
+  loss+=("distillation.distillation_loss.loss_max_clamp=null")
+  log "loss weights: $MOPD_BALANCE"
+fi
 export B2E_CKPT_DIR=$CKPT/$NAME
 leg=()
 if [ -n "${LEG_STEPS:-}" ]; then

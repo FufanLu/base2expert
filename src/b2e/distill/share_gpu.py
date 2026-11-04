@@ -18,10 +18,10 @@ imported.
 
 from __future__ import annotations
 
-import importlib.abc
-import importlib.util
 import sys
 from types import ModuleType
+
+from b2e.distill.hook import on_import
 
 TARGET = "verl.experimental.teacher_loop.teacher_model"
 
@@ -52,34 +52,6 @@ def patch(module: ModuleType) -> None:
     print(f"b2e: {module.__name__} patched, teachers share the teacher pool's GPUs", file=sys.stderr, flush=True)
 
 
-class _Hook(importlib.abc.MetaPathFinder):
-    def __init__(self, target: str) -> None:
-        self.target = target
-
-    def find_spec(self, name, path, target=None):
-        if name != self.target:
-            return None
-        sys.meta_path.remove(self)  # find the real spec, then wrap its loader
-        try:
-            spec = importlib.util.find_spec(name)
-        finally:
-            sys.meta_path.insert(0, self)
-        if spec is None or spec.loader is None:
-            return spec
-        loader = spec.loader
-        run = loader.exec_module
-
-        def exec_module(module: ModuleType) -> None:
-            run(module)
-            patch(module)
-
-        loader.exec_module = exec_module  # type: ignore[method-assign]
-        return spec
-
-
 def install(target: str = TARGET) -> None:
     """Patch the module now if it is imported, else when it is."""
-    if target in sys.modules:
-        patch(sys.modules[target])
-    elif not any(isinstance(f, _Hook) and f.target == target for f in sys.meta_path):
-        sys.meta_path.insert(0, _Hook(target))
+    on_import(target, patch)
