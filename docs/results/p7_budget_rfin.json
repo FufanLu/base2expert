@@ -1,0 +1,235 @@
+{
+  "model": "/tmp/b2e-models/dapo_fin_step90",
+  "thinking": "true",
+  "temperature": 0.0,
+  "sets": {
+    "finqa_test@b128": {
+      "n": 1147,
+      "skipped_too_long": 0,
+      "budget": 128,
+      "runs": [
+        {
+          "accuracy": 0.7899,
+          "strict_accuracy": 0.7899,
+          "boxed_rate": 1.0,
+          "mean_tokens": 354.9,
+          "reopened_think": 0.0,
+          "truncated": 1,
+          "seconds": 53.0,
+          "forced_rate": 1.0
+        }
+      ],
+      "accuracy_mean": 0.7899,
+      "accuracy_spread": 0.0
+    },
+    "finqa_test@b256": {
+      "n": 1147,
+      "skipped_too_long": 0,
+      "budget": 256,
+      "runs": [
+        {
+          "accuracy": 0.8021,
+          "strict_accuracy": 0.8021,
+          "boxed_rate": 1.0,
+          "mean_tokens": 474.8,
+          "reopened_think": 0.0,
+          "truncated": 0,
+          "seconds": 60.3,
+          "forced_rate": 1.0
+        }
+      ],
+      "accuracy_mean": 0.8021,
+      "accuracy_spread": 0.0
+    },
+    "finqa_test@b512": {
+      "n": 1147,
+      "skipped_too_long": 0,
+      "budget": 512,
+      "runs": [
+        {
+          "accuracy": 0.8091,
+          "strict_accuracy": 0.8091,
+          "boxed_rate": 1.0,
+          "mean_tokens": 733.8,
+          "reopened_think": 0.0,
+          "truncated": 1,
+          "seconds": 87.6,
+          "forced_rate": 0.9538
+        }
+      ],
+      "accuracy_mean": 0.8091,
+      "accuracy_spread": 0.0
+    },
+    "finqa_test@b1024": {
+      "n": 1147,
+      "skipped_too_long": 0,
+      "budget": 1024,
+      "runs": [
+        {
+          "accuracy": 0.8143,
+          "strict_accuracy": 0.8143,
+          "boxed_rate": 1.0,
+          "mean_tokens": 1055.0,
+          "reopened_think": 0.0,
+          "truncated": 0,
+          "seconds": 113.6,
+          "forced_rate": 0.2877
+        }
+      ],
+      "accuracy_mean": 0.8143,
+      "accuracy_spread": 0.0
+    },
+    "finqa_test@b2048": {
+      "n": 1147,
+      "skipped_too_long": 0,
+      "budget": 2048,
+      "runs": [
+        {
+          "accuracy": 0.8117,
+          "strict_accuracy": 0.8117,
+          "boxed_rate": 1.0,
+          "mean_tokens": 1130.1,
+          "reopened_think": 0.0,
+          "truncated": 0,
+          "seconds": 118.5,
+          "forced_rate": 0.0035
+        }
+      ],
+      "accuracy_mean": 0.8117,
+      "accuracy_spread": 0.0
+    },
+    "finqa_test@b4096": {
+      "n": 1147,
+      "skipped_too_long": 0,
+      "budget": 4096,
+      "runs": [
+        {
+          "accuracy": 0.8126,
+          "strict_accuracy": 0.8126,
+          "boxed_rate": 1.0,
+          "mean_tokens": 1133.0,
+          "reopened_think": 0.0,
+          "truncated": 0,
+          "seconds": 118.6,
+          "forced_rate": 0.0
+        }
+      ],
+      "accuracy_mean": 0.8126,
+      "accuracy_spread": 0.0
+    },
+    "tatqa_test@b128": {
+      "n": 739,
+      "skipped_too_long": 0,
+      "budget": 128,
+      "runs": [
+        {
+          "accuracy": 0.9188,
+          "strict_accuracy": 0.9188,
+          "boxed_rate": 1.0,
+          "mean_tokens": 340.3,
+          "reopened_think": 0.0,
+          "truncated": 0,
+          "seconds": 22.0,
+          "forced_rate": 1.0
+        }
+      ],
+      "accuracy_mean": 0.9188,
+      "accuracy_spread": 0.0
+    },
+    "tatqa_test@b256": {
+      "n": 739,
+      "skipped_too_long": 0,
+      "budget": 256,
+      "runs": [
+        {
+          "accuracy": 0.9269,
+          "strict_accuracy": 0.9269,
+          "boxed_rate": 1.0,
+          "mean_tokens": 462.8,
+          "reopened_think": 0.0,
+          "truncated": 0,
+          "seconds": 24.1,
+          "forced_rate": 1.0
+        }
+      ],
+      "accuracy_mean": 0.9269,
+      "accuracy_spread": 0.0
+    },
+    "tatqa_test@b512": {
+      "n": 739,
+      "skipped_too_long": 0,
+      "budget": 512,
+      "runs": [
+        {
+          "accuracy": 0.9391,
+          "strict_accuracy": 0.9391,
+          "boxed_rate": 1.0,
+          "mean_tokens": 716.9,
+          "reopened_think": 0.0,
+          "truncated": 0,
+          "seconds": 36.0,
+          "forced_rate": 0.8985
+        }
+      ],
+      "accuracy_mean": 0.9391,
+      "accuracy_spread": 0.0
+    },
+    "tatqa_test@b1024": {
+      "n": 739,
+      "skipped_too_long": 0,
+      "budget": 1024,
+      "runs": [
+        {
+          "accuracy": 0.9432,
+          "strict_accuracy": 0.9432,
+          "boxed_rate": 1.0,
+          "mean_tokens": 953.1,
+          "reopened_think": 0.0,
+          "truncated": 0,
+          "seconds": 50.1,
+          "forced_rate": 0.1529
+        }
+      ],
+      "accuracy_mean": 0.9432,
+      "accuracy_spread": 0.0
+    },
+    "tatqa_test@b2048": {
+      "n": 739,
+      "skipped_too_long": 0,
+      "budget": 2048,
+      "runs": [
+        {
+          "accuracy": 0.9405,
+          "strict_accuracy": 0.9405,
+          "boxed_rate": 1.0,
+          "mean_tokens": 987.2,
+          "reopened_think": 0.0,
+          "truncated": 0,
+          "seconds": 54.4,
+          "forced_rate": 0.0
+        }
+      ],
+      "accuracy_mean": 0.9405,
+      "accuracy_spread": 0.0
+    },
+    "tatqa_test@b4096": {
+      "n": 739,
+      "skipped_too_long": 0,
+      "budget": 4096,
+      "runs": [
+        {
+          "accuracy": 0.9418,
+          "strict_accuracy": 0.9418,
+          "boxed_rate": 1.0,
+          "mean_tokens": 983.8,
+          "reopened_think": 0.0,
+          "truncated": 0,
+          "seconds": 54.3,
+          "forced_rate": 0.0
+        }
+      ],
+      "accuracy_mean": 0.9418,
+      "accuracy_spread": 0.0
+    }
+  }
+}
