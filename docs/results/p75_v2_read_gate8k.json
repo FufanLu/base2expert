@@ -1,0 +1,445 @@
+{
+ "nothink": {
+  "problems": 1668,
+  "verdicts": {
+   "disagree": 224,
+   "unclosed": 871,
+   "valid": 424,
+   "invalid": 132,
+   "no_box": 17
+  },
+  "outcome_by_verdict": {
+   "always": {
+    "disagree": 15,
+    "invalid": 8,
+    "no_box": 11,
+    "unclosed": 461,
+    "valid": 365
+   },
+   "mixed": {
+    "disagree": 59,
+    "invalid": 36,
+    "no_box": 3,
+    "unclosed": 183,
+    "valid": 57
+   },
+   "never": {
+    "disagree": 150,
+    "invalid": 88,
+    "no_box": 3,
+    "unclosed": 227,
+    "valid": 2
+   }
+  },
+  "mixed": 338,
+  "usable": 57
+ },
+ "think": {
+  "problems": 1896,
+  "verdicts": {
+   "valid": 848,
+   "unclosed": 930,
+   "no_box": 28,
+   "disagree": 83,
+   "invalid": 7
+  },
+  "outcome_by_verdict": {
+   "always": {
+    "disagree": 17,
+    "invalid": 4,
+    "no_box": 24,
+    "unclosed": 754,
+    "valid": 795
+   },
+   "mixed": {
+    "disagree": 26,
+    "invalid": 2,
+    "no_box": 2,
+    "unclosed": 107,
+    "valid": 52
+   },
+   "never": {
+    "disagree": 40,
+    "invalid": 1,
+    "no_box": 2,
+    "unclosed": 69,
+    "valid": 1
+   }
+  },
+  "mixed": 189,
+  "usable": 52
+ },
+ "audit": {
+  "flawed": 8,
+  "sound": 32,
+  "flawed_dropped": 8,
+  "flawed_kept": 0,
+  "sound_dropped": 20,
+  "sound_kept": 12,
+  "recall": 1.0,
+  "precision": 0.2857142857142857,
+  "fisher_p": 0.07898920592419044,
+  "rows": [
+   {
+    "mode": "nothink",
+    "id": "r0-75",
+    "label": "sound",
+    "verdict": "no_box",
+    "box": NaN,
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-91",
+    "label": "sound",
+    "verdict": "valid",
+    "box": "-1.15\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-248",
+    "label": "sound",
+    "verdict": "disagree",
+    "box": "3",
+    "nfin": 8,
+    "right": 2
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-264",
+    "label": "flawed",
+    "verdict": "unclosed",
+    "box": "INVALID",
+    "nfin": 8,
+    "right": 3
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-336",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "1.66\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-435",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "9\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-490",
+    "label": "flawed",
+    "verdict": "invalid",
+    "box": "INVALID",
+    "nfin": 8,
+    "right": 0
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-632",
+    "label": "flawed",
+    "verdict": "disagree",
+    "box": "7.49",
+    "nfin": 8,
+    "right": 0
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-859",
+    "label": "flawed",
+    "verdict": "disagree",
+    "box": "-8",
+    "nfin": 8,
+    "right": 0
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-918",
+    "label": "sound",
+    "verdict": "valid",
+    "box": "0.58\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-941",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 6
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-1017",
+    "label": "sound",
+    "verdict": "valid",
+    "box": "0.11\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-1125",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-1130",
+    "label": "sound",
+    "verdict": "valid",
+    "box": "-11",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-1283",
+    "label": "flawed",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 7
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-1285",
+    "label": "flawed",
+    "verdict": "disagree",
+    "box": "19.79",
+    "nfin": 8,
+    "right": 5
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-1302",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-1308",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 0
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-1404",
+    "label": "flawed",
+    "verdict": "unclosed",
+    "box": "INVALID",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "nothink",
+    "id": "r0-1521",
+    "label": "sound",
+    "verdict": "valid",
+    "box": "-2.08\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-120",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 3
+   },
+   {
+    "mode": "think",
+    "id": "r0-137",
+    "label": "sound",
+    "verdict": "valid",
+    "box": "0.75\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-186",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-192",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "INVALID",
+    "nfin": 8,
+    "right": 0
+   },
+   {
+    "mode": "think",
+    "id": "r0-302",
+    "label": "sound",
+    "verdict": "valid",
+    "box": "4764.7",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-389",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "INVALID",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-403",
+    "label": "sound",
+    "verdict": "valid",
+    "box": "5.46\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-536",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "-37.6%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-589",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "207.1\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-622",
+    "label": "sound",
+    "verdict": "valid",
+    "box": "4.9\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-671",
+    "label": "sound",
+    "verdict": "valid",
+    "box": "100.82\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-679",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-789",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-828",
+    "label": "flawed",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 0
+   },
+   {
+    "mode": "think",
+    "id": "r0-890",
+    "label": "sound",
+    "verdict": "valid",
+    "box": "1.55\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-1145",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "50%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-1285",
+    "label": "sound",
+    "verdict": "valid",
+    "box": "12.33\\%",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-1458",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-1480",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 8
+   },
+   {
+    "mode": "think",
+    "id": "r0-1771",
+    "label": "sound",
+    "verdict": "unclosed",
+    "box": "",
+    "nfin": 8,
+    "right": 8
+   }
+  ]
+ }
+}

@@ -1,0 +1,162 @@
+{
+ "nothink": {
+  "tokens_by_verdict": {
+   "disagree": {
+    "p10": 2927,
+    "p50": 4140,
+    "p90": 6069
+   },
+   "invalid": {
+    "p10": 1776,
+    "p50": 2847,
+    "p90": 5986
+   },
+   "no_box": {
+    "p10": 8192,
+    "p50": 8192,
+    "p90": 8192
+   },
+   "unclosed": {
+    "p10": 8192,
+    "p50": 8192,
+    "p90": 8192
+   },
+   "valid": {
+    "p10": 1815,
+    "p50": 3817,
+    "p90": 6804
+   }
+  },
+  "finish_by_verdict": {
+   "disagree": {
+    "stop": 224
+   },
+   "invalid": {
+    "stop": 132
+   },
+   "no_box": {
+    "length": 17
+   },
+   "unclosed": {
+    "length": 871
+   },
+   "valid": {
+    "stop": 424
+   }
+  },
+  "unclosed_last_box": {
+   "disagree": 355,
+   "invalid": 275,
+   "no_box": 149,
+   "valid": 92
+  },
+  "unclosed_looped": 14,
+  "unclosed_distinct_last60": {
+   "p10": 0.95,
+   "p50": 1.0,
+   "p90": 1.0
+  },
+  "closed_distinct_last60": {
+   "p10": 0.87,
+   "p50": 0.95,
+   "p90": 1.0
+  },
+  "examples": [
+   {
+    "id": "r0-714",
+    "tokens": 8192,
+    "tail": "assume the question is a standard financial analysis question.\n    Answer: CAGR.\n    Value: 15.79%.\n    I will write 15.8%.\n    \n    Wait, I'll calculate it one more time to be absolutely sure.\n    $3400952 / 2536499 = 1.340807533$\n    $\\sqrt{1.340807533} = 1.15793245$\n    $1.15793245 - 1 = 0.15793245$\n    $15.793245\\%$\n    \n    If I have to choose between 15.8% and 16%, 15.8% is more informative.\n    If I have to choose between 15.79% and 15.8%, 15.79% is more precise.\n    I'll provide 15.8%. It feels like a standard \"reporting\" precision.\n    Actually, let's look at the numbers.\n    1,002,320 (7 digits)\n    2,779,782 (7 digits)\n    Precision is high.\n    I'll provide 15.79%.\n    \n    Wait,"
+   },
+   {
+    "id": "r0-1473",
+    "tokens": 8192,
+    "tail": "if the question asks \"By how many percentage points did the loss change\", and the loss decreased, the answer is likely negative or a decrease.\n    *   But \"percentage points\" is a weird unit here.\n    *   Let's check if there's any other data point.\n    *   \"reclassifications... $ 2 million...\".\n    *   Maybe the \"net pension and other benefits loss\" refers to the reclassification amount?\n    *   Text: \"for the years ended ... 2017 , 2016 , and 2015 , $ 2 million , $ ( 5 ) million and $ 1 million of net currency translation adjustment gains/ ( losses ) were transferred...\".\n    *   This is for currency translation.\n    *   Text: \"see note 13 . benefit plans ... for disclosures related to pmi"
+   },
+   {
+    "id": "r0-1233",
+    "tokens": 8192,
+    "tail": "ys 2018 and 2019. 2019 is the year before 2020.\n    *   So it definitely points to the 2019 fiscal year data (Jan 3, 2020 column).\n\n    *   Let's check the text for \"2019\".\n    *   \"In fiscal 2017...\"\n    *   \"During fiscal 2019, 2018 and 2017...\"\n    *   So 2019 is a valid fiscal year identifier used in the text.\n    *   The table column \"January 3, 2020\" is the data for Fiscal 2019.\n    *   So the mapping is confirmed.\n\n    *   Step 1: Identify data for Year Ended 2018.\n        *   Date: December 28, 2018.\n        *   Expense: $44 million.\n        *   Tax Benefit: $11 million.\n        *   Rate = 11/44 = 25%.\n    *   Step 2: Identify data for Year Ended 2019.\n        *   Date: January 3, 20"
+   }
+  ]
+ },
+ "think": {
+  "tokens_by_verdict": {
+   "disagree": {
+    "p10": 2798,
+    "p50": 4049,
+    "p90": 6208
+   },
+   "invalid": {
+    "p10": 2221,
+    "p50": 2991,
+    "p90": 4365
+   },
+   "no_box": {
+    "p10": 8192,
+    "p50": 8192,
+    "p90": 8192
+   },
+   "unclosed": {
+    "p10": 8192,
+    "p50": 8192,
+    "p90": 8192
+   },
+   "valid": {
+    "p10": 2103,
+    "p50": 3881,
+    "p90": 7178
+   }
+  },
+  "finish_by_verdict": {
+   "disagree": {
+    "stop": 83
+   },
+   "invalid": {
+    "stop": 7
+   },
+   "no_box": {
+    "length": 28
+   },
+   "unclosed": {
+    "length": 930
+   },
+   "valid": {
+    "stop": 848
+   }
+  },
+  "unclosed_last_box": {
+   "disagree": 527,
+   "valid": 185,
+   "invalid": 61,
+   "no_box": 157
+  },
+  "unclosed_looped": 28,
+  "unclosed_distinct_last60": {
+   "p10": 0.93,
+   "p50": 1.0,
+   "p90": 1.0
+  },
+  "closed_distinct_last60": {
+   "p10": 0.88,
+   "p50": 0.98,
+   "p90": 1.0
+  },
+  "examples": [
+   {
+    "id": "r0-950",
+    "tokens": 8192,
+    "tail": "djusted earnings per share (£m)\" makes no sense. EPS is usually £. Earnings is £m. It's likely \"Adjusted Earnings (£m)\".\n    *   Regardless, the numbers are clearly in £m and represent cash flows.\n\n    *   Let's check the text for \"Pension contributions\" cash outflow details again.\n    *   \"Pension contributions in the year were £41.9m... Pension deficit contribution payments made... of £34.9m... balance being expenses connected to administering... and government levies.\"\n    *   This confirms £41.9m is the total cash outflow for pension-related items.\n\n    *   Let's check \"Interest\" cash outflow details.\n    *   \"Net interest paid was £7.9m lower in the year at £30.1m\".\n    *   Confirms £30"
+   },
+   {
+    "id": "r0-1559",
+    "tokens": 8192,
+    "tail": " approximating.\n    *   But the table values are exact integers (mostly).\n    *   I'll provide 14379.5.\n\n    *   Let's double check the calculation 8859 + 19900.\n    *   8000 + 19000 = 27000.\n    *   800 + 900 = 1700.\n    *   59 + 0 = 59.\n    *   27000 + 1700 + 59 = 28759.\n    *   28759 / 2 = 14379.5.\n    *   Correct.\n\n    *   One more check: \"average annual balance ... between fiscal years 2009 and 2010\".\n    *   Could it mean the average balance of FY2009 AND the average balance of FY2010?\n    *   We have the ending balance of FY2009 (8859).\n    *   We have the ending balance of FY2010 (19900).\n    *   If we assume the \"annual balance\" is represented by the ending balance, then we average "
+   },
+   {
+    "id": "r0-721",
+    "tokens": 8192,
+    "tail": "he subject.\n    The rows describe the subject.\n    The values are in the columns.\n    Usually, the first column (shares) is the main quantity.\n\n    Let's consider the \"awards\" row.\n    \"awards | 149140314\"\n    This is the number of awards granted during the period.\n    The question asks for growth rate *from* row A *to* row B.\n    So it compares the balances.\n\n    Final decision: 47.65%.\n\n    Wait, is there any chance \"unvested stock awards\" refers to the \"weighted average grant date fair value\"?\n    If so, the growth rate is (36.23 - 50.70) / 50.70 = -28.54%.\n    Why would they ask for growth rate in \"awards\" if they meant \"value\"?\n    \"Awards\" are the shares. \"Value\" is the value.\n    Also"
+   }
+  ]
+ }
+}
