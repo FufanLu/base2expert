@@ -37,8 +37,9 @@ small scaling-law fit, data-mix ablations, and chained 8-hour jobs.
 > and the rubric judge, which agrees with HealthBench physicians as well as they agree with each
 > other: class-balanced F1 0.686 vs 0.689, difference 95 % [−0.021, +0.017]); P7 (law and medicine
 > RL) in progress, law at step 60 and medicine at step 30; P7.5's grounded pilot has proposed (83 % / 95 % of
-> proposals kept without / with thinking; 7 / 20 and 1 / 20 of the kept flawed by hand audit) and
-> waits for its validity gate; the P8 code (teacher sharing, Open-MOPD weights, weight merging)
+> proposals kept without / with thinking; 7 / 20 and 1 / 20 of the kept flawed by hand audit); its
+> validity gate, at 8,192 tokens, was cut inside its thinking on half the problems and so dropped 20 of
+> the 32 sound audited ones along with all 8 flawed (F#100), and is queued again at 32,768; the P8 code (teacher sharing, Open-MOPD weights, weight merging)
 > are written, their GPU runs queued; R-fin's thinking-budget curve is measured (below); P9 not started. Side track: tokenizer, data shards and a d12 smoke so far. Only measured numbers appear
 > below, each with its job in [docs/runs.md](docs/runs.md); every failure, including my own
 > mistakes, is in [docs/failures.md](docs/failures.md); the stage plan is in
@@ -56,7 +57,7 @@ Qwen3.5-4B-Base
        └─ S-mix SFT (all three) ────────────────────── MOPD ──► Trident-4B              smoke queued
              ├─ baseline: RL on the three-domain mix
              └─ baseline: TIES / DARE merge of R-fin, R-law, R-med
-R-fin → self-written problems on real filings, validity-gated, three rounds (P7.5)    pilot: proposed, gate queued
+R-fin → self-written problems on real filings, validity-gated, three rounds (P7.5)    pilot: gate rerun queued
 Side track: nanochat from scratch (tokenizer, d12 smoke); AutoResearch on d8 (two-lane search)
 ```
 
