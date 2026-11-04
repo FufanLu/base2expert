@@ -36,7 +36,7 @@ small scaling-law fit, data-mix ablations, and chained 8-hour jobs.
 > **Status (2026-11-04):** main line P0, P1, P3, P4 and P6 done; P5 done (four offline methods,
 > and the rubric judge, which agrees with HealthBench physicians as well as they agree with each
 > other: class-balanced F1 0.686 vs 0.689, difference 95 % [−0.021, +0.017]); P7 (law and medicine
-> RL) in progress, law at step 60 and medicine at step 30; P7.5's grounded pilot has proposed (83 % / 95 % of
+> RL) in progress, law and medicine at step 60; P7.5's grounded pilot has proposed (83 % / 95 % of
 > proposals kept without / with thinking; 7 / 20 and 1 / 20 of the kept flawed by hand audit); its
 > validity gate, at 8,192 tokens, was cut inside its thinking on half the problems and so dropped 20 of
 > the 32 sound audited ones along with all 8 flawed (F#100), and is queued again at 32,768; the P8 code (teacher sharing, Open-MOPD weights, weight merging)
