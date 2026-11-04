@@ -12,8 +12,15 @@ so do --mean and the "first" column here.
 
 --rows gives each source's number of val rows, for the accuracy over all of
 them; an accuracy times its row count must be a whole number of rows, so a
-wrong count is caught rather than averaged in. Runs on the login node's system
-Python (3.9, standard library only).
+wrong count is caught rather than averaged in. A source scored in grades rather
+than right or wrong is named with --graded and its step (CAIL term: 0.2, from
+`term_score`); its accuracy times its rows must then be a multiple of the step,
+and it adds that sum of scores, not whole rows, to "all":
+
+    python3 -I tools/val_log.py $B2E_ROOT/logs/rl_dapo_law.log \\
+        --rows cail2018_articles=200,cail2018_charges=199,cail2018_term=200 --graded cail2018_term=0.2
+
+Runs on the login node's system Python (3.9, standard library only).
 """
 
 from __future__ import annotations
@@ -47,16 +54,21 @@ def first_readings(readings: list[tuple[int, dict[str, float]]]) -> dict[int, di
     return first
 
 
-def rows_right(acc: dict[str, float], rows: dict[str, int]) -> tuple[int, int]:
-    """(rows answered right, rows) over all sources; each product must be whole."""
+def rows_right(acc: dict[str, float], rows: dict[str, int],
+               graded: dict[str, float] | None = None) -> tuple[float, int]:
+    """(rows answered right, rows) over all sources; each product must be whole, or for a
+    graded source a multiple of its step (then its score sum is added)."""
     if set(acc) != set(rows):
         raise ValueError(f"val sources {sorted(acc)} but --rows names {sorted(rows)}")
-    right = 0
+    graded = graded or {}
+    right: float = 0
     for src, a in acc.items():
-        k = a * rows[src]
+        step = graded.get(src, 1.0)
+        k = a * rows[src] / step
         if abs(k - round(k)) > 1e-6:
-            raise ValueError(f"{src}: accuracy {a} is not a whole number of {rows[src]} rows")
-        right += round(k)
+            what = f"a multiple of {step} over" if src in graded else "a whole number of"
+            raise ValueError(f"{src}: accuracy {a} is not {what} {rows[src]} rows")
+        right += round(k) * step
     return right, sum(rows.values())
 
 
@@ -64,10 +76,16 @@ def parse_rows(spec: str) -> dict[str, int]:
     return {k: int(v) for k, v in (kv.split("=") for kv in spec.split(","))}
 
 
+def parse_graded(spec: str) -> dict[str, float]:
+    return {k: float(v) for k, v in (kv.split("=") for kv in spec.split(","))}
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("log", type=Path)
     ap.add_argument("--rows", type=parse_rows, help="source=rows,... for the accuracy over all rows")
+    ap.add_argument("--graded", type=parse_graded, default={},
+                    help="source=step,... for sources scored in grades of that step")
     ap.add_argument("--mean", action="append", default=[], metavar="STEPS",
                     help="comma-separated steps: mean of their first readings (twice, with --rows: also the difference)")
     args = ap.parse_args(argv)
@@ -83,8 +101,8 @@ def main(argv: list[str] | None = None) -> None:
         cells = "  ".join(f"{acc[s]:7.4f}" if s in acc else "      -" for s in sources)
         total = ""
         if args.rows:
-            k, n = rows_right(acc, args.rows)
-            total = f"  {k / n:.4f} ({k}/{n})"
+            k, n = rows_right(acc, args.rows, args.graded)
+            total = f"  {k / n:.4f} ({k:g}/{n})"
         print(f"{step:>4}  {'yes' if step not in seen else 'no':>5}  {cells}{total}")
         seen.add(step)
     means = []
@@ -96,7 +114,7 @@ def main(argv: list[str] | None = None) -> None:
         per = {s: sum(first[t].get(s, float("nan")) for t in steps) / len(steps) for s in sources}
         line = "  ".join(f"{s} {v:.4f}" for s, v in per.items())
         if args.rows:
-            k = sum(rows_right(first[t], args.rows)[0] for t in steps) / len(steps)
+            k = sum(rows_right(first[t], args.rows, args.graded)[0] for t in steps) / len(steps)
             n = sum(args.rows.values())
             means.append(k / n)
             line += f"  all {k / n:.4f} ({k:.2f}/{n} rows)"

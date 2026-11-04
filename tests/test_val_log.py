@@ -37,6 +37,17 @@ def test_rows_right_checks_the_counts():
         rows_right({"finqa": 0.75}, ROWS)
 
 
+def test_a_graded_source_adds_its_scores():
+    # CAIL term scores in steps of 0.2: 0.556 of 200 rows is 111.2, not a whole number of rows
+    acc = {"articles": 0.72, "term": 0.556}
+    with pytest.raises(ValueError, match="whole number"):
+        rows_right(acc, {"articles": 200, "term": 200})
+    k, n = rows_right(acc, {"articles": 200, "term": 200}, {"term": 0.2})
+    assert (k, n) == (pytest.approx(255.2), 400)
+    with pytest.raises(ValueError, match="multiple of 0.2"):
+        rows_right({"articles": 0.72, "term": 0.5555}, {"articles": 200, "term": 200}, {"term": 0.2})
+
+
 def test_means_and_difference(tmp_path, capsys):
     log = tmp_path / "rl.log"
     log.write_text("\n".join(LOG) + "\n")
