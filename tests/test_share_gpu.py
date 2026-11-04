@@ -69,6 +69,44 @@ def test_sharing_refuses_what_does_not_fit(tmp_path, monkeypatch):
         mod.MultiTeacherModelManager(cfg(2, world_size=2), types.SimpleNamespace(world_size=1, max_colocate_count=3))
 
 
+class Teacher:
+    def __init__(self, world_size):
+        self.world_size, self.prepared = world_size, None
+
+    def validate_and_prepare_for_distillation(self, use_topk, topk):
+        self.prepared = (use_topk, topk)
+
+
+class FakeDistillationConfig:
+    """verl's dataclass calls __post_init__ from __init__; unpatched, it wants the world sizes to sum to the pool."""
+
+    def __init__(self, teachers, n_gpus_per_node=1, nnodes=1):
+        self.enabled, self.n_gpus_per_node, self.nnodes, self.raw = True, n_gpus_per_node, nnodes, teachers
+        self.distillation_loss = types.SimpleNamespace(loss_settings=types.SimpleNamespace(use_topk=False), topk=32)
+        self.__post_init__()
+
+    def _resolve_teacher_models(self):
+        return dict(self.raw)
+
+    def __post_init__(self):
+        if sum(t.world_size for t in self._resolve_teacher_models().values()) != self.n_gpus_per_node * self.nnodes:
+            raise ValueError("Sum of teacher (num_replicas * per_replica_world_size)")
+
+
+def test_the_config_check_wants_each_teacher_on_the_whole_pool():
+    mod = types.ModuleType("fake_distillation")
+    mod.DistillationConfig = type("DistillationConfig", (FakeDistillationConfig,), {})
+    three = {k: Teacher(1) for k in ("fin", "law", "med")}
+    with pytest.raises(ValueError, match="Sum of teacher"):
+        mod.DistillationConfig(three)  # what failed the MOPD smoke 11598610 in the actor worker
+    share_gpu.patch_config(mod)
+    c = mod.DistillationConfig(three)
+    assert set(c.teacher_models) == {"fin", "law", "med"}
+    assert all(t.prepared == (False, 32) for t in c.teacher_models.values())  # verl's per-teacher checks still run
+    with pytest.raises(ValueError, match="needs 1 GPUs; sharing gives every teacher the whole pool of 2"):
+        mod.DistillationConfig({"fin": Teacher(1)}, n_gpus_per_node=2)
+
+
 def test_the_mopd_mix_routes_each_domain_to_its_teacher(tmp_path):
     import pandas as pd
 
