@@ -145,7 +145,10 @@ Short smoke jobs, mostly on `gpu-short`.
 
 - R-law and R-med with the recipe chosen in P6. R-fin is the best P6 run.
 - Medicine adds RaR-Medicine rubric rewards (the P5 rubric judge).
-- Accuracy-vs-thinking-budget curves.
+- Accuracy-vs-thinking-budget curves. R-fin measured 11-04 (11608839, budget forcing): FinQA
+  test 0.790 at 128 thinking tokens (= no thinking) to 0.813 at 4,096, flat from 512 on (paired
+  p >= 0.34); the answer after `</think>` is ~220 tokens at every budget and does the computation.
+  So R-fin-low is judged against R-fin cut at the same budget, not against R-fin unbounded.
 - Effort control (2026-11-03, Kimi K3's recipe in place of an L1-style
   length reward): a low-effort finance teacher, R-fin-low, continued from
   R-fin. Each prompt's budget is S-fin's (the cold-start model's) length on it
