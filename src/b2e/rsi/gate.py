@@ -18,7 +18,9 @@ under the finance verifier, so the gold has a second, independent derivation.
 
 At 8,192 tokens about half the pilot's answers were cut inside their thinking, none of them looping
 (11594795, docs/runs.md 11-04); the model card asks for 32,768:
---max-tokens 32768 --max-model-len 40960.
+--max-tokens 32768 --max-model-len 40960. At that budget one pilot mode (1,668 problems) took 1:56 of
+gpu-short's 2 hours (11612731), so --shard i --shards n grades rows i, i + n, ... and writes
+gate_<i>of<n>.parquet (and the other outputs) for jobs that each fit.
 
     python -P -m b2e.rsi.gate --judge /tmp/b2e-models/Qwen3.6-35B-A3B \\
         --problems $B2E_ROOT/data/rsi/round1/problems.parquet --out $B2E_ROOT/data/rsi/round1
@@ -60,6 +62,14 @@ def verdict(text: str, ground_truth: str) -> str:
     return "valid" if compute_score("rsi_fin", text, ground_truth, thinking=True) >= 1.0 else "disagree"
 
 
+def shard_path(out: Path, name: str, shard: int, shards: int) -> Path:
+    """out/name, or out/gate_0of2.parquet for shard 0 of 2."""
+    if shards == 1:
+        return out / name
+    stem, ext = name.split(".", 1)
+    return out / f"{stem}_{shard}of{shards}.{ext}"
+
+
 def main(argv: list[str] | None = None) -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--judge", required=True)
@@ -70,12 +80,16 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--temperature", type=float, default=0.6)
     ap.add_argument("--top-p", type=float, default=0.95)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--shard", type=int, default=0, help="grade rows shard, shard + shards, ...")
+    ap.add_argument("--shards", type=int, default=1)
     args = ap.parse_args(argv)
+    if not 0 <= args.shard < args.shards:
+        ap.error(f"--shard {args.shard} is not in [0, --shards {args.shards})")
 
     import pandas as pd
     from vllm import LLM, SamplingParams
 
-    df = pd.read_parquet(args.problems)
+    df = pd.read_parquet(args.problems).iloc[args.shard::args.shards]
     rows = df.to_dict("records")
     llm = LLM(model=args.judge, gpu_memory_utilization=0.9, max_model_len=args.max_model_len,
               enable_prefix_caching=True)
@@ -94,10 +108,11 @@ def main(argv: list[str] | None = None) -> None:
         "tokens": [len(o.outputs[0].token_ids) if o is not None else 0 for o in graded],
         "finish": [o.outputs[0].finish_reason if o is not None else "too_long" for o in graded],
         "text": texts,
-    }).to_parquet(args.out / "gate.parquet", index=False)
-    df[[v == "valid" for v in verdicts]].to_parquet(args.out / "problems_gated.parquet", index=False)
+    }).to_parquet(shard_path(args.out, "gate.parquet", args.shard, args.shards), index=False)
+    df[[v == "valid" for v in verdicts]].to_parquet(
+        shard_path(args.out, "problems_gated.parquet", args.shard, args.shards), index=False)
     summary = {"problems": len(rows), **dict(Counter(verdicts))}
-    (args.out / "summary_gate.json").write_text(json.dumps(summary, indent=2))
+    shard_path(args.out, "summary_gate.json", args.shard, args.shards).write_text(json.dumps(summary, indent=2))
     print(json.dumps(summary))
 
 

@@ -5,7 +5,7 @@ import pandas as pd
 from b2e.data.finance import finqa_rows
 from b2e.data.rl_pool import mixed_finished, select
 from b2e.rsi.docs import build, split_prompt
-from b2e.rsi.gate import gate_messages, verdict
+from b2e.rsi.gate import gate_messages, shard_path, verdict
 from b2e.rsi.propose import filter_grounded, grounded_messages, prior_problems, same_value
 
 EXCERPT_TEXT = "Net revenues were $4,981 million in 2018 and $5,260 million in 2019."
@@ -122,3 +122,9 @@ def test_finished_samples_decide_mixed():
                           "finish": [["stop", "stop", "length", "length"], ["stop"] * 4]})
     assert [e["id"] for e in select(pool, rates, 0.1, 0.9)["extra_info"]] == ["0", "1"]
     assert [e["id"] for e in select(pool, rates, 0.1, 0.9, finished=True)["extra_info"]] == ["1"]
+
+
+def test_a_shard_writes_its_own_files(tmp_path):
+    assert shard_path(tmp_path, "gate.parquet", 0, 1) == tmp_path / "gate.parquet"
+    assert shard_path(tmp_path, "gate.parquet", 1, 2) == tmp_path / "gate_1of2.parquet"
+    assert shard_path(tmp_path, "summary_gate.json", 0, 2) == tmp_path / "summary_gate_0of2.json"
