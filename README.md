@@ -33,13 +33,13 @@ A side track pre-trains a 0.56B bilingual model from scratch with
 [nanochat](https://github.com/karpathy/nanochat). It covers the tokenizer, a
 small scaling-law fit, data-mix ablations, and chained 8-hour jobs.
 
-> **Status (2026-11-03):** main line P0, P1, P3, P4 and P6 done; P5 done (four offline methods,
+> **Status (2026-11-04):** main line P0, P1, P3, P4 and P6 done; P5 done (four offline methods,
 > and the rubric judge, which agrees with HealthBench physicians as well as they agree with each
 > other: class-balanced F1 0.686 vs 0.689, difference 95 % [−0.021, +0.017]); P7 (law and medicine
-> RL) in progress, leg 1 of 5 done for each; P7.5's grounded pilot has proposed (83 % / 95 % of
+> RL) in progress, law at step 60 and medicine at step 30; P7.5's grounded pilot has proposed (83 % / 95 % of
 > proposals kept without / with thinking; 7 / 20 and 1 / 20 of the kept flawed by hand audit) and
 > waits for its validity gate; the P8 code (teacher sharing, Open-MOPD weights, weight merging)
-> and the thinking-budget eval are written, their GPU runs queued; P9 not started. Side track: tokenizer, data shards and a d12 smoke so far. Only measured numbers appear
+> are written, their GPU runs queued; R-fin's thinking-budget curve is measured (below); P9 not started. Side track: tokenizer, data shards and a d12 smoke so far. Only measured numbers appear
 > below, each with its job in [docs/runs.md](docs/runs.md); every failure, including my own
 > mistakes, is in [docs/failures.md](docs/failures.md); the stage plan is in
 > [docs/plan.md](docs/plan.md).
@@ -85,7 +85,24 @@ CAIL articles 0.530 → 0.710, charges 0.714 → 0.729, prison term 0.541 → 0.
 MedMCQA 0.755 → 0.755, CMExam 0.805 → 0.800. Most of the articles gain is the model no longer adding
 general-part articles (article 67 above all), which CAIL never labels and the prompt's own example
 named (F#92), not better legal reading; the English medicine gain is answers that now finish within
-the cap.
+the cap. Law's second leg: articles 0.760, charges 0.779, term 0.564 at step 60 (all 599 rows: 0.595 at
+step 0, 0.672 at 30, 0.701 at 60). The control for F#92 measured what the example cost before RL: on CAIL
+test's 339 articles questions S-law scores 0.490 with the prompt as trained and 0.596 / 0.575 with an
+example drawn from the labels (`\boxed{133}`, `\boxed{196、264}`; paired, p ≈ 1e-5 each, unchanged without
+the rows whose label holds the example), and writes general-part articles in 129 answers against 81 / 92.
+
+**R-fin against its thinking budget** (budget forcing: the thinking is closed at B tokens, then the
+answer is written; FinQA test 1,147 / TAT-QA test 739):
+
+| Thinking budget | 128 | 256 | 512 | 1,024 | 2,048 | 4,096 | no thinking |
+|---|---|---|---|---|---|---|---|
+| FinQA | 0.790 | 0.802 | 0.809 | 0.814 | 0.812 | 0.813 | 0.790 |
+| TAT-QA | 0.919 | 0.927 | 0.939 | 0.943 | 0.941 | 0.942 | 0.921-0.924 |
+
+The answer after `</think>` is ~220 tokens at every budget and holds the computation; the whole
+thinking block is worth about 2.3 points, all of it within 512 tokens (paired against 4,096: 512 p = 0.34
+and 0.62, 128 p < 0.001). R-fin thinks ~900 tokens where 512 do as well, which sets the bar for R-fin-low:
+it has to beat R-fin cut at the same budget.
 
 **Findings worth knowing** (details in docs/failures.md):
 - F#86: the CAIL charges verifier never paid a selective charge (`[走私、贩卖、运输、制造]毒品`);
