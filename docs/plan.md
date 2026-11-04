@@ -215,6 +215,11 @@ questions in documents):
     cap (4,096 law, 8,192 medicine) and answer length, the imbalance it
     diagnoses; instruction following, the shortest answers, is the one
     expected to suffer.
+    As built (92412cc, `b2e.distill.balance`, `MOPD_BALANCE=share|gap`): the
+    weights are per routing key and per step; the gap is an EMA (decay 0.9, ours)
+    of each key's rollout-time per-token loss, so gap weights need a sampled-token
+    loss (k3), and a top-k loss gets share weights only; the paper's per-mini-batch
+    reward refresh is left out.
 - Teachers include R-fin-low (P7), routed on the effort flag.
 - Baselines:
   - (a) mixed RL from S-mix at equal GPU-hours;
