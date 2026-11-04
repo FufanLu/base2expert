@@ -106,6 +106,9 @@ and 0.62, 128 p < 0.001). R-fin thinks ~900 tokens where 512 do as well, which s
 it has to beat R-fin cut at the same budget. R-fin-low's first step (multiplier 0.5) put 18.9 % of its
 rollouts over budget, not the 42 % R-fin's own rollouts predicted: on the same 72 prompts the
 "Reasoning effort: low." flag alone makes R-fin's answers 0.88× as long at the median, before any training.
+After leg 1 (30 steps at 0.5), val answers are 29 % shorter at the same accuracy (FinQA 0.8136 → 0.8136,
+1,063 → 752 tokens; TAT-QA 0.9399 → 0.9356, 894 → 635), and the rollouts sit at 0.27× their budget, so leg 2
+runs at 0.35 (9.1 % of step 30's rollouts over).
 
 **Findings worth knowing** (details in docs/failures.md):
 - F#86: the CAIL charges verifier never paid a selective charge (`[走私、贩卖、运输、制造]毒品`);
