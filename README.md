@@ -33,10 +33,13 @@ A side track pre-trains a 0.56B bilingual model from scratch with
 [nanochat](https://github.com/karpathy/nanochat). It covers the tokenizer, a
 small scaling-law fit, data-mix ablations, and chained 8-hour jobs.
 
-> **Status (2026-11-03):** main line P0, P1, P3, P4 and P6 done; P5's four offline methods done
-> (its rubric judge is being calibrated); P7 (law and medicine RL) in progress, leg 1 of 5 done for
-> each; the P7.5, P8 and effort-control code is written and its first GPU runs are queued; P9 not
-> started. Side track: tokenizer, data shards and a d12 smoke so far. Only measured numbers appear
+> **Status (2026-11-03):** main line P0, P1, P3, P4 and P6 done; P5 done (four offline methods,
+> and the rubric judge, which agrees with HealthBench physicians as well as they agree with each
+> other: class-balanced F1 0.686 vs 0.689, difference 95 % [−0.021, +0.017]); P7 (law and medicine
+> RL) in progress, leg 1 of 5 done for each; P7.5's grounded pilot has proposed (83 % / 95 % of
+> proposals kept without / with thinking; 7 / 20 and 1 / 20 of the kept flawed by hand audit) and
+> waits for its validity gate; the P8 code (teacher sharing, Open-MOPD weights, weight merging)
+> and the thinking-budget eval are written, their GPU runs queued; P9 not started. Side track: tokenizer, data shards and a d12 smoke so far. Only measured numbers appear
 > below, each with its job in [docs/runs.md](docs/runs.md); every failure, including my own
 > mistakes, is in [docs/failures.md](docs/failures.md); the stage plan is in
 > [docs/plan.md](docs/plan.md).
@@ -53,7 +56,7 @@ Qwen3.5-4B-Base
        └─ S-mix SFT (all three) ────────────────────── MOPD ──► Trident-4B              smoke queued
              ├─ baseline: RL on the three-domain mix
              └─ baseline: TIES / DARE merge of R-fin, R-law, R-med
-R-fin → self-written problems on real filings, validity-gated, three rounds (P7.5)    pilot queued
+R-fin → self-written problems on real filings, validity-gated, three rounds (P7.5)    pilot: proposed, gate queued
 Side track: nanochat from scratch (tokenizer, d12 smoke); AutoResearch on d8 (two-lane search)
 ```
 
