@@ -50,7 +50,7 @@ small scaling-law fit, data-mix ablations, and chained 8-hour jobs.
 Qwen3.5-4B-Base
   └─ M0  mid-training (finance + law + medicine + general replay + long-CoT anneal)     done
        ├─ S-fin SFT → R-fin RL (DAPO, P6)  ─┐                                            done
-       │    └─ R-fin-low (low reasoning effort, per-prompt token budgets)               queued
+       │    └─ R-fin-low (low reasoning effort, per-prompt token budgets)               running
        ├─ S-law SFT → R-law RL (DAPO, P7)  ─┼─ teachers ─┐                              running
        ├─ S-med SFT → R-med RL (DAPO, P7)  ─┘            │                              running
        └─ S-mix SFT (all three) ────────────────────── MOPD ──► Trident-4B              smoke queued
@@ -102,7 +102,9 @@ answer is written; FinQA test 1,147 / TAT-QA test 739):
 The answer after `</think>` is ~220 tokens at every budget and holds the computation; the whole
 thinking block is worth about 2.3 points, all of it within 512 tokens (paired against 4,096: 512 p = 0.34
 and 0.62, 128 p < 0.001). R-fin thinks ~900 tokens where 512 do as well, which sets the bar for R-fin-low:
-it has to beat R-fin cut at the same budget.
+it has to beat R-fin cut at the same budget. R-fin-low's first step (multiplier 0.5) put 18.9 % of its
+rollouts over budget, not the 42 % R-fin's own rollouts predicted: on the same 72 prompts the
+"Reasoning effort: low." flag alone makes R-fin's answers 0.88× as long at the median, before any training.
 
 **Findings worth knowing** (details in docs/failures.md):
 - F#86: the CAIL charges verifier never paid a selective charge (`[走私、贩卖、运输、制造]毒品`);
