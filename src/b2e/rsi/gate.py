@@ -16,6 +16,10 @@ under the finance verifier, so the gold has a second, independent derivation.
   unclosed   cut inside its thinking
   too_long   the prompt does not fit the context; not graded
 
+At 8,192 tokens about half the pilot's answers were cut inside their thinking, none of them looping
+(11594795, docs/runs.md 11-04); the model card asks for 32,768:
+--max-tokens 32768 --max-model-len 40960.
+
     python -P -m b2e.rsi.gate --judge /tmp/b2e-models/Qwen3.6-35B-A3B \\
         --problems $B2E_ROOT/data/rsi/round1/problems.parquet --out $B2E_ROOT/data/rsi/round1
 """
@@ -62,6 +66,7 @@ def main(argv: list[str] | None = None) -> None:
     ap.add_argument("--problems", type=Path, required=True, help="b2e.rsi.propose problems.parquet")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--max-tokens", type=int, default=8192)
+    ap.add_argument("--max-model-len", type=int, default=16384)
     ap.add_argument("--temperature", type=float, default=0.6)
     ap.add_argument("--top-p", type=float, default=0.95)
     ap.add_argument("--seed", type=int, default=0)
@@ -72,11 +77,12 @@ def main(argv: list[str] | None = None) -> None:
 
     df = pd.read_parquet(args.problems)
     rows = df.to_dict("records")
-    llm = LLM(model=args.judge, gpu_memory_utilization=0.9, max_model_len=16384, enable_prefix_caching=True)
+    llm = LLM(model=args.judge, gpu_memory_utilization=0.9, max_model_len=args.max_model_len,
+              enable_prefix_caching=True)
     sp = SamplingParams(temperature=args.temperature, top_p=args.top_p, max_tokens=args.max_tokens, seed=args.seed)
     msgs = [gate_messages(r) for r in rows]
     tok = llm.get_tokenizer()
-    ok = [fits(tok, m, True, args.max_tokens, 16384) for m in msgs]  # one too long would end the batch (F#31)
+    ok = [fits(tok, m, True, args.max_tokens, args.max_model_len) for m in msgs]  # one too long would end the batch (F#31)
     outs = iter(llm.chat([m for m, k in zip(msgs, ok, strict=True) if k], sp, chat_template_kwargs={"enable_thinking": True}))
     graded = [next(outs) if k else None for k in ok]
     texts = [o.outputs[0].text if o is not None else "" for o in graded]
