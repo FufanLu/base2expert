@@ -1,0 +1,50 @@
+{
+  "draw": "problems.parquet .sample(n=20, random_state=1) per mode, before the gate and the pass-rate filter",
+  "runs": "docs/runs.md, hand audit of the redesign pilot (11-03)",
+  "labels": {
+    "nothink": {
+      "r0-941": "sound",
+      "r0-1308": "sound",
+      "r0-1521": "sound",
+      "r0-859": "flawed",
+      "r0-632": "flawed",
+      "r0-1404": "flawed",
+      "r0-248": "sound",
+      "r0-918": "sound",
+      "r0-435": "sound",
+      "r0-264": "flawed",
+      "r0-91": "sound",
+      "r0-1017": "sound",
+      "r0-336": "sound",
+      "r0-490": "flawed",
+      "r0-1283": "flawed",
+      "r0-1285": "flawed",
+      "r0-1302": "sound",
+      "r0-1125": "sound",
+      "r0-1130": "sound",
+      "r0-75": "sound"
+    },
+    "think": {
+      "r0-302": "sound",
+      "r0-137": "sound",
+      "r0-828": "flawed",
+      "r0-403": "sound",
+      "r0-120": "sound",
+      "r0-1480": "sound",
+      "r0-192": "sound",
+      "r0-589": "sound",
+      "r0-890": "sound",
+      "r0-1458": "sound",
+      "r0-1771": "sound",
+      "r0-1145": "sound",
+      "r0-679": "sound",
+      "r0-671": "sound",
+      "r0-789": "sound",
+      "r0-622": "sound",
+      "r0-536": "sound",
+      "r0-389": "sound",
+      "r0-1285": "sound",
+      "r0-186": "sound"
+    }
+  }
+}
