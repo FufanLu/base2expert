@@ -184,6 +184,11 @@ questions in documents):
    it independently; a problem is kept only if the judge calls it valid and
    its answer matches the program's. The judge is external, not the solver's
    own majority.
+   (11-04, after the pilot: run after the pass-rate filter, on the mixed problems
+   only. Usable is valid and mixed, so the order does not change which problems
+   are usable; the gate, at 32,768 tokens (F#100), is the dearer step, and the
+   mixed were 527 of the pilot's 3,564. The pilot's gate passed the hand-audit
+   test: all 8 flawed dropped, 11 of 32 sound, Fisher p 0.00098.)
 3. Dedup by meaning: as built (bd129ca), two problems on the same excerpt
    with the same answer (or one in percent) are the same task, and a problem
    repeating one of the dataset's own answers on its excerpt is dropped; a

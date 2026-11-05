@@ -1,4 +1,5 @@
 import json
+import random
 
 import pandas as pd
 
@@ -6,7 +7,7 @@ from b2e.data.finance import finqa_rows
 from b2e.data.rl_pool import mixed_finished, select
 from b2e.rsi.docs import build, split_prompt
 from b2e.rsi.gate import gate_messages, shard_path, verdict
-from b2e.rsi.propose import filter_grounded, grounded_messages, prior_problems, same_value
+from b2e.rsi.propose import HINTS, draw_grounded, filter_grounded, grounded_messages, prior_problems, same_value
 
 EXCERPT_TEXT = "Net revenues were $4,981 million in 2018 and $5,260 million in 2019."
 TABLE = [["", "2019", "2018"], ["net revenues", "5,260", "4,981"], ["cost of revenues", "3,031", "2,940"]]
@@ -128,3 +129,14 @@ def test_a_shard_writes_its_own_files(tmp_path):
     assert shard_path(tmp_path, "gate.parquet", 0, 1) == tmp_path / "gate.parquet"
     assert shard_path(tmp_path, "gate.parquet", 1, 2) == tmp_path / "gate_1of2.parquet"
     assert shard_path(tmp_path, "summary_gate.json", 0, 2) == tmp_path / "summary_gate_0of2.json"
+
+
+def test_a_round_larger_than_the_pool_covers_every_excerpt_before_repeating_a_pair():
+    pool = [{"doc_id": str(i)} for i in range(4)]
+    docs, hints = draw_grounded(pool, 3, random.Random(0))
+    assert len({d["doc_id"] for d in docs}) == 3  # without replacement, as in the pilot
+    docs, hints = draw_grounded(pool, 10, random.Random(0))
+    ids = [d["doc_id"] for d in docs]
+    assert sorted(ids[:4]) == ["0", "1", "2", "3"] and sorted(ids[4:8]) == ["0", "1", "2", "3"]
+    pairs = list(zip(ids, hints, strict=True))
+    assert len(set(pairs)) == 10 and set(hints) <= set(HINTS)

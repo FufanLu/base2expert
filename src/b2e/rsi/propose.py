@@ -254,6 +254,12 @@ def filter_problems(texts: list[str], round_idx: int, index=None, seen: list[set
 Taken = dict[str, list[tuple[set[str], float]]]
 
 
+def duplicate(sh: set[str], value: float, past: Sequence[tuple[set[str], float]]) -> bool:
+    """A problem on an excerpt repeats one already kept there: the same answer (or it in percent),
+    or a question whose 5-gram shingles overlap one of theirs by a Jaccard of 0.8 or more."""
+    return any(same_value(value, v) or len(sh & s) / max(1, len(sh | s)) >= 0.8 for s, v in past)
+
+
 def filter_grounded(texts: list[str], docs: Sequence[dict], round_idx: int, prior: Taken | None = None, index=None,
                     thinking: bool = False, outcomes: list[str] | None = None) -> tuple[list[dict], Counter]:
     """filter_problems for grounded proposals: texts[i] was written about docs[i] (b2e.rsi.docs records).
@@ -291,7 +297,7 @@ def filter_grounded(texts: list[str], docs: Sequence[dict], round_idx: int, prio
             continue
         sh = shingles(prob["question"])
         past = taken.setdefault(doc["doc_id"], [])
-        if any(same_value(value, v) or len(sh & s) / max(1, len(sh | s)) >= 0.8 for s, v in past):
+        if duplicate(sh, value, past):
             note("duplicate")
             continue
         if index is not None and index.contaminated(doc["excerpt"] + "\n" + prob["question"]):
@@ -301,6 +307,27 @@ def filter_grounded(texts: list[str], docs: Sequence[dict], round_idx: int, prio
         rows.append(to_row({**prob, "context": doc["excerpt"]}, value, round_idx, len(rows), doc))
         note("kept")
     return rows, stats
+
+
+def draw_grounded(pool: list[dict], n: int, rng: random.Random) -> tuple[list[dict], list[str]]:
+    """n (excerpt, hint) pairs to propose about. Up to the pool's size, a sample without replacement
+    and a hint drawn for each (the pilot's draw). Beyond it, every excerpt once before any twice,
+    and one excerpt's hints all different for up to len(HINTS) passes: drawn with replacement, a
+    pair would come back with the same prompt and, under one seed, the same proposal, which the
+    duplicate check then drops (about one in nine of a 10,000-proposal round)."""
+    if n <= len(pool):
+        docs = rng.sample(pool, n)
+        return docs, [rng.choice(HINTS) for _ in docs]
+    order = {d["doc_id"]: rng.sample(HINTS, len(HINTS)) for d in pool}
+    docs: list[dict] = []
+    hints: list[str] = []
+    passes = 0
+    while len(docs) < n:
+        for d in rng.sample(pool, len(pool)):
+            docs.append(d)
+            hints.append(order[d["doc_id"]][passes % len(HINTS)])
+        passes += 1
+    return docs[:n], hints[:n]
 
 
 def prior_problems(rows: Sequence[dict]) -> Taken:
@@ -341,9 +368,7 @@ def main() -> None:
     rng = random.Random(args.seed + args.round)
     docs = hints = None
     if args.docs:
-        pool = pd.read_parquet(args.docs).to_dict("records")
-        docs = rng.sample(pool, args.n) if args.n <= len(pool) else [rng.choice(pool) for _ in range(args.n)]
-        hints = [rng.choice(HINTS) for _ in docs]
+        docs, hints = draw_grounded(pd.read_parquet(args.docs).to_dict("records"), args.n, rng)
         msgs = [grounded_messages(d, h) for d, h in zip(docs, hints, strict=True)]
     else:
         msgs = [proposer_messages(rng) for _ in range(args.n)]
