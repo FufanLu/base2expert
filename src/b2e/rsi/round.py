@@ -118,10 +118,12 @@ def main(argv: list[str] | None = None) -> None:
     elif args.cmd == "mixed":
         problems, rates = pd.read_parquet(args.problems), pd.read_parquet(args.passrate)
         df = select(problems, rates, 0.1, 0.9, finished=True)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
         df.to_parquet(args.out, index=False)
         print(json.dumps({"problems": len(problems), "scored": len(rates), "mixed": len(df)}))
     elif args.cmd == "join":
         df = join([pd.read_parquet(f) for f in args.shards])
+        args.out.parent.mkdir(parents=True, exist_ok=True)
         df.to_parquet(args.out, index=False)
         print(json.dumps({"rows": len(df), "shards": len(args.shards)}))
     else:

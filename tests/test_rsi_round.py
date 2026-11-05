@@ -66,5 +66,5 @@ def test_mixed_keeps_the_problems_right_and_wrong_among_finished(tmp_path):
     pd.DataFrame([row("a", "d1", "q one?", 1.0), row("b", "d2", "q two?", 2.0)]).to_parquet(tmp_path / "p.parquet")
     rates(["a", "b"], [[1, 0, 1, 0], [1, 1, 1, 1]]).to_parquet(tmp_path / "r.parquet")
     main(["mixed", "--problems", str(tmp_path / "p.parquet"), "--passrate", str(tmp_path / "r.parquet"),
-          "--out", str(tmp_path / "m.parquet")])
-    assert [e["id"] for e in pd.read_parquet(tmp_path / "m.parquet")["extra_info"]] == ["a"]
+          "--out", str(tmp_path / "new" / "m.parquet")])  # a directory not made yet (the dry check, 11630054)
+    assert [e["id"] for e in pd.read_parquet(tmp_path / "new" / "m.parquet")["extra_info"]] == ["a"]
