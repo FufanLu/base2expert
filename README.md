@@ -55,7 +55,7 @@ Qwen3.5-4B-Base
        │    └─ R-fin-low (low reasoning effort, per-prompt token budgets)               running
        ├─ S-law SFT → R-law RL (DAPO, P7)  ─┼─ teachers ─┐                              running
        ├─ S-med SFT → R-med RL (DAPO, P7)  ─┘            │                              running
-       └─ S-mix SFT (all three) ────────────────────── MOPD ──► Trident-4B              smoke queued
+       └─ S-mix SFT (all three) ────────────────────── MOPD ──► Trident-4B              smoke passed
              ├─ baseline: RL on the three-domain mix
              └─ baseline: TIES / DARE merge of R-fin, R-law, R-med
 R-fin → self-written problems on real filings, validity-gated, three rounds (P7.5)    pilot done
