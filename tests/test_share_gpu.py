@@ -35,7 +35,8 @@ def fake_module(tmp_path, monkeypatch):
 
 
 def cfg(n_teachers, world_size=1):
-    teachers = {k: types.SimpleNamespace(key=k, world_size=world_size) for k in ["fin", "law", "med"][:n_teachers]}
+    keys = ["fin", "law", "med", "fin_low"][:n_teachers]
+    teachers = {k: types.SimpleNamespace(key=k, world_size=world_size) for k in keys}
     return types.SimpleNamespace(teacher_models=teachers)
 
 
@@ -67,6 +68,49 @@ def test_sharing_refuses_what_does_not_fit(tmp_path, monkeypatch):
         mod.MultiTeacherModelManager(cfg(3), types.SimpleNamespace(world_size=1, max_colocate_count=2))
     with pytest.raises(ValueError, match="needs 2 GPUs"):
         mod.MultiTeacherModelManager(cfg(2, world_size=2), types.SimpleNamespace(world_size=1, max_colocate_count=3))
+    with pytest.raises(ValueError, match="4 teachers on one pool, but it holds 3"):
+        mod.MultiTeacherModelManager(cfg(4), types.SimpleNamespace(world_size=1, max_colocate_count=3))
+    m = mod.MultiTeacherModelManager(cfg(4), types.SimpleNamespace(world_size=1, max_colocate_count=4))
+    assert set(m.teacher_model_managers) == {"fin", "law", "med", "fin_low"}
+
+
+def fake_pools(monkeypatch):
+    """A stand-in for verl's ray base module: a pool manager whose pools record their colocate count."""
+    mod = types.ModuleType("b2e_fake_ray_base")
+
+    class RayResourcePool:
+        def __init__(self, process_on_nodes, use_gpu, max_colocate_count, name_prefix):
+            self.max_colocate_count = max_colocate_count
+
+    class ResourcePoolManager:
+        max_colocate_count = 3  # verl's dataclass default
+
+        def __init__(self, resource_pool_spec):
+            self.resource_pool_spec, self.resource_pool_dict, self.checked = resource_pool_spec, {}, False
+
+        def _check_resource_available(self):
+            self.checked = True
+
+    ResourcePoolManager.__module__ = mod.__name__
+    mod.RayResourcePool, mod.ResourcePoolManager = RayResourcePool, ResourcePoolManager
+    monkeypatch.setitem(sys.modules, mod.__name__, mod)
+    return mod
+
+
+def test_the_teacher_pool_holds_one_worker_group_per_teacher(monkeypatch):
+    mod = fake_pools(monkeypatch)
+    share_gpu.patch_pools(mod)
+    spec = {"global_pool": [1], "teacher_pool": [1]}
+
+    def counts(per_gpu):
+        monkeypatch.setenv("B2E_TEACHERS_PER_GPU", per_gpu)
+        m = mod.ResourcePoolManager(spec)
+        m.create_resource_pool()
+        assert m.checked  # verl's GPU count check still runs
+        return {k: p.max_colocate_count for k, p in m.resource_pool_dict.items()}
+
+    assert counts("4") == {"global_pool": 3, "teacher_pool": 4}  # P8's four teachers; the student's pool as verl's
+    assert counts("2") == {"global_pool": 3, "teacher_pool": 3}  # fewer than verl's default leaves the default
 
 
 class Teacher:

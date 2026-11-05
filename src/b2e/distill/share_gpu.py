@@ -26,10 +26,16 @@ steps that way: every teacher near uniform, the k3 loss at its clamp of 10 on al
 Both happen in Ray processes, out of reach of the job's main process, so they are installed at
 interpreter start-up: cluster/mopd_site/sitecustomize.py calls install() when
 B2E_TEACHERS_SHARE_GPU=1, and install() patches each verl module as it is imported.
+
+Three is verl's limit, not the GPU's: ResourcePoolManager builds every pool with
+max_colocate_count 3 (a dataclass field nothing sets). P8 has four teachers (R-fin, R-fin-low,
+R-law, R-med), so the teacher pool, and only it, is built to hold B2E_TEACHERS_PER_GPU worker
+groups when that is more than 3 (cluster/mopd.sbatch sets it to the number of teachers).
 """
 
 from __future__ import annotations
 
+import os
 import sys
 from types import ModuleType
 
@@ -37,6 +43,8 @@ from b2e.distill.hook import on_import
 
 TARGET = "verl.experimental.teacher_loop.teacher_model"
 CONFIG = "verl.workers.config.distillation"
+POOLS = "verl.single_controller.ray.base"
+TEACHER_POOL = "teacher_pool"  # the name verl's trainer gives the teacher pool in resource_pool_spec
 
 
 def shared_initialize(self) -> None:
@@ -77,6 +85,24 @@ def shared_post_init(self) -> None:
                              f"pool of {pool}")
 
 
+def shared_create_resource_pool(self) -> None:
+    """ResourcePoolManager.create_resource_pool, with the teacher pool holding B2E_TEACHERS_PER_GPU
+    worker groups when that is more than the default; every other pool as verl builds it."""
+    ray_base = sys.modules[type(self).__module__]
+    per_gpu = int(os.environ.get("B2E_TEACHERS_PER_GPU", "0"))
+    for name, process_on_nodes in self.resource_pool_spec.items():
+        count = max(self.max_colocate_count, per_gpu) if name == TEACHER_POOL else self.max_colocate_count
+        self.resource_pool_dict[name] = ray_base.RayResourcePool(
+            process_on_nodes=process_on_nodes, use_gpu=True, max_colocate_count=count, name_prefix=name)
+    self._check_resource_available()
+
+
+def patch_pools(module: ModuleType) -> None:
+    module.ResourcePoolManager.create_resource_pool = shared_create_resource_pool  # type: ignore[attr-defined]
+    print(f"b2e: {module.__name__} patched, the teacher pool holds "
+          f"{os.environ.get('B2E_TEACHERS_PER_GPU', 'the default number of')} worker groups", file=sys.stderr, flush=True)
+
+
 def patch_config(module: ModuleType) -> None:
     module.DistillationConfig.__post_init__ = shared_post_init  # type: ignore[attr-defined]
     print(f"b2e: {module.__name__} patched, each teacher's world size checked against the whole pool",
@@ -89,7 +115,8 @@ def patch(module: ModuleType) -> None:
     print(f"b2e: {module.__name__} patched, teachers share the teacher pool's GPUs", file=sys.stderr, flush=True)
 
 
-def install(target: str = TARGET, config: str = CONFIG) -> None:
+def install(target: str = TARGET, config: str = CONFIG, pools: str = POOLS) -> None:
     """Patch each module now if it is imported, else when it is."""
     on_import(target, patch)
     on_import(config, patch_config)
+    on_import(pools, patch_pools)

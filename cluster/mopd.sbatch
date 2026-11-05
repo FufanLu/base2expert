@@ -13,9 +13,11 @@
 #   RUN=mopd_smoke STUDENT=s_mix TEACHERS="fin=dapo_fin_step90 law=s_law med=s_med" RL_DATA=mopd_smoke \
 #     sbatch cluster/mopd.sbatch
 # TEACHERS maps each routing key (the `teacher` column of b2e.data.mopd_mix) to a model dir in
-# $MODELS; each teacher's vLLM gets TEACHER_MEM of the GPU (default 0.27, three to a GPU) and at most
-# TEACHER_SEQS sequences at once (default 256): at 0.27 a teacher has 755 Mamba cache blocks, one per
-# sequence, and vLLM refuses to start when max_num_seqs (verl's default 1,024) is more (11611081).
+# $MODELS; each teacher's vLLM gets TEACHER_MEM of the GPU (default 0.81 / the number of teachers:
+# 0.27 for three, 0.20 for P8's four) and at most TEACHER_SEQS sequences at once (default 256): at
+# 0.27 a teacher has 755 Mamba cache blocks, one per sequence, and vLLM refuses to start when
+# max_num_seqs (verl's default 1,024) is more (11611081). The teacher pool is built to hold one worker
+# group per teacher (B2E_TEACHERS_PER_GPU; verl's pools hold 3).
 # A teacher added with + does not inherit the teacher_model template of verl's distillation.yaml but
 # RolloutConfig's defaults (F#104), so the template's settings that matter are given here: load_format
 # auto (the default, dummy, served random weights in the smoke 11626637), enforce_eager true (the
@@ -32,7 +34,8 @@ STUDENT=${STUDENT:?student model dir}
 TEACHERS=${TEACHERS:?key=model ...}
 RL_DATA=${RL_DATA:?data dir in $DATA/processed}
 NAME=${NAME:-$RUN}
-TEACHER_MEM=${TEACHER_MEM:-0.27}
+n_teachers=$(wc -w <<< "$TEACHERS")
+TEACHER_MEM=${TEACHER_MEM:-$(awk -v n="$n_teachers" 'BEGIN { printf "%.2f", 0.81 / n }')}
 TEACHER_SEQS=${TEACHER_SEQS:-256}
 export B2E_USE_EXT=1
 gpu_info
@@ -40,7 +43,7 @@ stage_env train
 export B2E_CODE=$CODE
 export B2E_MODEL=$(stage_model "$STUDENT")
 check_arch "$B2E_MODEL"
-export B2E_TEACHERS_SHARE_GPU=1 PYTHONPATH="$CODE/cluster/mopd_site${PYTHONPATH:+:$PYTHONPATH}"
+export B2E_TEACHERS_SHARE_GPU=1 B2E_TEACHERS_PER_GPU=$n_teachers PYTHONPATH="$CODE/cluster/mopd_site${PYTHONPATH:+:$PYTHONPATH}"
 D=$DATA/processed/$RL_DATA
 to_list() { python -P -c "import sys; print('[' + ','.join(repr(l.strip()) for l in open(sys.argv[1]) if l.strip()) + ']')" "$1"; }
 train=$(to_list "$D/rl_train.txt") val=$(to_list "$D/rl_val.txt")
@@ -57,7 +60,7 @@ for kv in $TEACHERS; do
         "$p.inference.load_format=auto" "$p.inference.enforce_eager=true"
         "$p.inference.prompt_length=4096" "$p.inference.response_length=$resp")
   case ${MOPD_LOSS:-k3} in *topk*) tov+=("$p.inference.engine_kwargs.vllm.max_logprobs=$topk") ;; esac
-  log "teacher $key: $model"
+  log "teacher $key: $model ($TEACHER_MEM of the GPU)"
 done
 loss=()
 [ -n "${MOPD_LOSS:-}" ] && loss+=("distillation.distillation_loss.loss_mode=$MOPD_LOSS")
