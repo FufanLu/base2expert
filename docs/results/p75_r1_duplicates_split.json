@@ -1,0 +1,19 @@
+{
+  "round_dir": "/scratch/lu.fu/b2e/data/rsi/round1",
+  "proposals": 10000,
+  "duplicates": 2638,
+  "repeats": {
+    "prior rounds": 1511,
+    "this round": 1120,
+    "both": 7
+  },
+  "caught_by": {
+    "answer only": 509,
+    "wording only": 444,
+    "answer and wording": 1685
+  },
+  "replay_mismatches": {},
+  "excerpts_drawn": 4228,
+  "excerpts_with_prior": 1967,
+  "prior_problems": 3564
+}

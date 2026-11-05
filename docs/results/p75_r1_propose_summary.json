@@ -1,0 +1,18 @@
+{
+  "round": 1,
+  "thinking": false,
+  "grounded": true,
+  "proposed": 10000,
+  "ungrounded": 666,
+  "program:exit 1": 262,
+  "kept": 5688,
+  "asked": 520,
+  "duplicate": 2638,
+  "parse": 3,
+  "program:rejected": 218,
+  "program:no output": 2,
+  "eval_overlap": 2,
+  "program:not a number": 1,
+  "mean_tokens": 140,
+  "cut_at_max_tokens": 0
+}
