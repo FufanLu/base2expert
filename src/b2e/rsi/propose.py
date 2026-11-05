@@ -316,8 +316,8 @@ def draw_grounded(pool: list[dict], n: int, rng: random.Random) -> tuple[list[di
     pair would come back with the same prompt and, under one seed, the same proposal, which the
     duplicate check then drops (about one in nine of a 10,000-proposal round)."""
     if n <= len(pool):
-        docs = rng.sample(pool, n)
-        return docs, [rng.choice(HINTS) for _ in docs]
+        picked = rng.sample(pool, n)
+        return picked, [rng.choice(HINTS) for _ in picked]
     order = {d["doc_id"]: rng.sample(HINTS, len(HINTS)) for d in pool}
     docs: list[dict] = []
     hints: list[str] = []
