@@ -1,0 +1,51 @@
+# P8 baseline (a), mixed RL (docs/plan.md, run design 11-05): DAPO from S-mix on the MOPD prompt mix
+# (b2e.data.mopd_mix: fin, fin_low, law and med a quarter each) for the same 12 H200-hours as MOPD.
+# One run has one max_response_length, so it is medicine's 8,192, and b2e.reward.caps.CappedDAPO
+# gives each row its expert's reward: the response cut at that domain's cap, DAPO's overlong zone
+# before it. The fin_low rows (the low-effort flag) are scored by R-fin-low's budget reward
+# (b2e.reward.budget; B2E_BUDGET_MULT per leg, 0.5 / 0.35 / 0.25 by thirds of the run, as R-fin-low's
+# legs); the other rows carry no budget and get their verifier's score.
+#   B2E_BUDGET_MULT=0.5 LEG_STEPS=<a third> cluster/submit_rl.sh dapo_mix s_mix mopd_p8 1
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+actor_rollout_ref:
+  actor:
+    clip_ratio_low: 0.2
+    clip_ratio_high: 0.28
+
+reward:
+  reward_manager:
+    source: importlib
+    name: CappedDAPO
+    module:
+      path: pkg://b2e.reward.caps
+  reward_kwargs:
+    max_resp_len: ${data.max_response_length}
+    overlong_buffer_cfg:
+      enable: false            # each domain's zone comes from caps instead
+    caps:                      # [cap, overlong zone], each expert's (configs/rl/dapo_*.yaml)
+      fin: [4096, 1024]
+      fin_low: [4096, 1024]
+      law: [4096, 1024]
+      med: [8192, 2048]
+  custom_reward_function:
+    path: ${oc.env:B2E_CODE}/src/b2e/reward/budget.py
+    name: compute_score
+    reward_kwargs:
+      budget_mult: ${oc.env:B2E_BUDGET_MULT}
+      model_path: ${oc.env:B2E_MODEL}
+
+data:
+  max_response_length: 8192
+  val_max_samples: -1
+
+trainer:
+  experiment_name: dapo_mix
+  # provisional: 12 H200-hours, the step count set from its smoke's step time before the run
+  total_training_steps: 90

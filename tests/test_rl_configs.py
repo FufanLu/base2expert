@@ -41,3 +41,18 @@ def test_mopd_is_the_smoke_at_full_scale_with_the_rl_runs_optimizer():
     assert full["data"]["max_response_length"] == load("dapo_med")["data"]["max_response_length"] == 8192
     # only the sample count is set: lr, mini-batches and clipping are base.yaml's, as in every RL run
     assert full["actor_rollout_ref"] == {"rollout": {"n": 1}}
+
+
+def test_mixed_rl_gives_each_domain_its_experts_cap_zone_and_reward():
+    mix, fin = load("dapo_mix"), load("dapo_fin")
+    caps = mix["reward"]["reward_kwargs"]["caps"]
+    expert = {"fin": fin, "fin_low": load("dapo_fin_low"), "law": load("dapo_law"), "med": load("dapo_med")}
+    base_cap = load("base")["data"]["max_response_length"]
+    for key, c in expert.items():
+        cap = c.get("data", {}).get("max_response_length", base_cap)
+        assert caps[key] == [cap, c["reward"]["reward_kwargs"]["overlong_buffer_cfg"]["len"]], key
+    assert mix["data"]["max_response_length"] == max(cap for cap, _ in caps.values())
+    assert mix["reward"]["reward_kwargs"]["overlong_buffer_cfg"] == {"enable": False}  # CappedDAPO refuses both
+    assert mix["actor_rollout_ref"] == fin["actor_rollout_ref"]  # clip-higher 0.28 as the experts
+    # R-fin-low's reward for the flagged rows; rows without a budget fall through to the verifier
+    assert mix["reward"]["custom_reward_function"] == load("dapo_fin_low")["reward"]["custom_reward_function"]
