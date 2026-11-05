@@ -15,6 +15,14 @@ TaskRunner and in the actor worker: their world sizes must sum to the pool's. Sh
 teacher's to equal it instead, so DistillationConfig.__post_init__ is patched too (the MOPD smoke
 11598610 failed on that check in the actor worker, 11-04).
 
+The patched check also refuses a teacher whose vLLM would load dummy weights. A teacher added with
+`+distillation.teacher_models.<key>.*` does not inherit the `teacher_model` template of verl's
+distillation.yaml (load_format auto, enforce_eager true, ...): it gets RolloutConfig's defaults,
+load_format "dummy" among them, which suits the student's rollout engine (the trainer syncs its
+weights) but not a teacher, whose weights nothing ever loads. The MOPD smoke 11626637 ran its four
+steps that way: every teacher near uniform, the k3 loss at its clamp of 10 on almost every token
+(F#104).
+
 Both happen in Ray processes, out of reach of the job's main process, so they are installed at
 interpreter start-up: cluster/mopd_site/sitecustomize.py calls install() when
 B2E_TEACHERS_SHARE_GPU=1, and install() patches each verl module as it is imported.
@@ -60,6 +68,9 @@ def shared_post_init(self) -> None:
     pool = self.n_gpus_per_node * self.nnodes
     loss = self.distillation_loss
     for key, t in self.teacher_models.items():
+        if t.inference.load_format == "dummy":
+            raise ValueError(f"teacher {key!r} would serve dummy weights (RolloutConfig's default load_format): "
+                             "set its inference.load_format to auto")
         t.validate_and_prepare_for_distillation(use_topk=loss.loss_settings.use_topk, topk=loss.topk)
         if t.world_size != pool:
             raise ValueError(f"teacher {key!r} needs {t.world_size} GPUs; sharing gives every teacher the whole "

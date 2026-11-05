@@ -70,8 +70,9 @@ def test_sharing_refuses_what_does_not_fit(tmp_path, monkeypatch):
 
 
 class Teacher:
-    def __init__(self, world_size):
+    def __init__(self, world_size, load_format="auto"):
         self.world_size, self.prepared = world_size, None
+        self.inference = types.SimpleNamespace(load_format=load_format)
 
     def validate_and_prepare_for_distillation(self, use_topk, topk):
         self.prepared = (use_topk, topk)
@@ -105,6 +106,9 @@ def test_the_config_check_wants_each_teacher_on_the_whole_pool():
     assert all(t.prepared == (False, 32) for t in c.teacher_models.values())  # verl's per-teacher checks still run
     with pytest.raises(ValueError, match="needs 1 GPUs; sharing gives every teacher the whole pool of 2"):
         mod.DistillationConfig({"fin": Teacher(1)}, n_gpus_per_node=2)
+    # a teacher added with + gets RolloutConfig's load_format "dummy": random weights (the smoke 11626637, F#104)
+    with pytest.raises(ValueError, match="dummy weights"):
+        mod.DistillationConfig({"fin": Teacher(1), "law": Teacher(1, load_format="dummy")})
 
 
 def test_the_mopd_mix_routes_each_domain_to_its_teacher(tmp_path):

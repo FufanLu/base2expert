@@ -16,6 +16,10 @@
 # $MODELS; each teacher's vLLM gets TEACHER_MEM of the GPU (default 0.27, three to a GPU) and at most
 # TEACHER_SEQS sequences at once (default 256): at 0.27 a teacher has 755 Mamba cache blocks, one per
 # sequence, and vLLM refuses to start when max_num_seqs (verl's default 1,024) is more (11611081).
+# A teacher added with + does not inherit the teacher_model template of verl's distillation.yaml but
+# RolloutConfig's defaults (F#104), so the template's settings that matter are given here: load_format
+# auto (the default, dummy, served random weights in the smoke 11626637), enforce_eager true (the
+# default captured CUDA graphs, which is where 11611081 stopped), and the student's lengths.
 # MOPD_LOSS / MOPD_PG pick the loss (k3 / true by default; forward_kl_topk wants PG false), and
 # a top-k loss raises vLLM's max_logprobs to distillation_loss.topk.
 # MOPD_BALANCE=share|gap turns on Open-MOPD's per-domain loss weights (b2e.distill.balance),
@@ -49,7 +53,9 @@ for kv in $TEACHERS; do
   p=+distillation.teacher_models.$key
   tov+=("$p.key=$key" "$p.model_path=$model" "$p.num_replicas=1" "$p.inference.name=vllm"
         "$p.inference.tensor_model_parallel_size=1" "$p.inference.gpu_memory_utilization=$TEACHER_MEM"
-        "$p.inference.max_num_seqs=$TEACHER_SEQS" "$p.inference.max_model_len=$maxlen")
+        "$p.inference.max_num_seqs=$TEACHER_SEQS" "$p.inference.max_model_len=$maxlen"
+        "$p.inference.load_format=auto" "$p.inference.enforce_eager=true"
+        "$p.inference.prompt_length=4096" "$p.inference.response_length=$resp")
   case ${MOPD_LOSS:-k3} in *topk*) tov+=("$p.inference.engine_kwargs.vllm.max_logprobs=$topk") ;; esac
   log "teacher $key: $model"
 done
