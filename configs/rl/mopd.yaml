@@ -1,0 +1,44 @@
+# P8 (docs/plan.md, run design 11-05): multi-teacher on-policy distillation of S-mix from four
+# teachers sharing one GPU (b2e.distill.share_gpu): R-fin, R-fin-low (rows with the low-effort flag),
+# R-law and R-med, routed by the `teacher` column of b2e.data.mopd_mix. As mopd_smoke.yaml at full
+# scale: 128 prompts x 1 sample a step and medicine's cap of 8,192 for every domain; the optimizer
+# settings of every RL run here (base.yaml: lr 1e-6, mini-batches of 32), so against mixed RL the
+# learning signal is what differs. Distillation loss only, k3 in policy-gradient form; MOPD_LOSS /
+# MOPD_PG / MOPD_BALANCE at submit time give the other arms.
+#   NAME=mopd RUN=mopd STUDENT=s_mix TEACHERS="fin=dapo_fin_step90 fin_low=<R-fin-low> law=dapo_law_step90
+#     med=<R-med>" RL_DATA=mopd_p8 LEG_STEPS=<n> sbatch cluster/mopd.sbatch
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+defaults:
+  - base
+  - _self_
+
+data:
+  train_batch_size: 128
+  max_response_length: 8192
+  val_max_samples: -1
+
+actor_rollout_ref:
+  rollout:
+    n: 1
+
+distillation:
+  enabled: true
+  n_gpus_per_node: 1
+  nnodes: 1
+  teacher_key: teacher
+  distillation_loss:
+    loss_mode: k3
+    use_policy_gradient: true
+    use_task_rewards: false
+    topk: 32
+    loss_max_clamp: 10.0
+    log_prob_min_clamp: -10.0
+
+trainer:
+  experiment_name: mopd
+  # provisional: the budget is 12 H200-hours (three gpu-short legs); the step count is set from the
+  # full-scale smoke's step time before the run (docs/runs.md)
+  total_training_steps: 100

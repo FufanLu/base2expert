@@ -32,3 +32,12 @@ def test_every_run_names_itself_and_sets_its_length():
             continue
         t = yaml.safe_load(f.read_text())["trainer"]
         assert t["experiment_name"] == f.stem and t["total_training_steps"] > 0, f.name
+
+
+def test_mopd_is_the_smoke_at_full_scale_with_the_rl_runs_optimizer():
+    smoke, full, base = load("mopd_smoke"), load("mopd"), load("base")
+    assert full["distillation"] == smoke["distillation"]  # same loss; MOPD_* switches at submit time
+    assert full["data"]["train_batch_size"] == base["data"]["train_batch_size"] == 128
+    assert full["data"]["max_response_length"] == load("dapo_med")["data"]["max_response_length"] == 8192
+    # only the sample count is set: lr, mini-batches and clipping are base.yaml's, as in every RL run
+    assert full["actor_rollout_ref"] == {"rollout": {"n": 1}}

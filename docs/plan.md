@@ -234,6 +234,24 @@ questions in documents):
     loss (k3), and a top-k loss gets share weights only; the paper's per-mini-batch
     reward refresh is left out.
 - Teachers include R-fin-low (P7), routed on the effort flag.
+- Run design (2026-11-05, before any full P8 run):
+  - Prompts: `b2e.data.mopd_mix` over the experts' own RL pools, 2,299 rows per teacher key, the
+    smallest pool's size (finance_low; fin 2,299 of 2,308, law of 6,803, med of 6,227), so fin,
+    fin_low, law and med are a quarter each; val 128 per key. MOPD and mixed RL read the same mix.
+  - MOPD (`configs/rl/mopd.yaml`): S-mix, the four teachers on one GPU (c895f74), 128 prompts x 1
+    sample a step, cap 8,192 (medicine's; finance and law were trained at 4,096), k3 in
+    policy-gradient form; lr 1e-6 and the optimizer settings of every RL run here, so the learning
+    signal is the one thing that differs from mixed RL.
+  - Budget: 12 H200-hours per arm, about one expert's run (R-fin 12.35, R-law ~12.3), counted from
+    sacct as elapsed x GPUs with staging included. MOPD: three gpu-short legs (2 GPUs x 2 h); its
+    step count follows from the step time of a smoke of this config at full scale (four teachers,
+    128 prompts, cap 8,192). Mixed RL: the same 12 H200-hours on one GPU.
+  - Mixed RL: DAPO from S-mix (128 x 8, clip-higher 0.28) with `CappedDAPO`, each expert's cap and
+    overlong zone (fin, fin_low, law 4,096 / 1,024; med 8,192 / 2,048), and the fin_low rows scored
+    by R-fin-low's budget reward, the multiplier 0.5 / 0.35 / 0.25 by thirds of the run as
+    R-fin-low's legs were.
+  - The other KL and the Open-MOPD weights run after the main MOPD at the same budget if GPU time
+    allows; decided then, before their runs.
 - Baselines:
   - (a) mixed RL from S-mix at equal GPU-hours;
   - (b) TIES / DARE merge;
