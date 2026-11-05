@@ -33,10 +33,11 @@ A side track pre-trains a 0.56B bilingual model from scratch with
 [nanochat](https://github.com/karpathy/nanochat). It covers the tokenizer, a
 small scaling-law fit, data-mix ablations, and chained 8-hour jobs.
 
-> **Status (2026-11-04):** main line P0, P1, P3, P4 and P6 done; P5 done (four offline methods,
+> **Status (2026-11-05):** main line P0, P1, P3, P4 and P6 done; P5 done (four offline methods,
 > and the rubric judge, which agrees with HealthBench physicians as well as they agree with each
 > other: class-balanced F1 0.686 vs 0.689, difference 95 % [−0.021, +0.017]); P7 (law and medicine
-> RL) in progress, law and medicine at step 60; P7.5's grounded pilot has proposed (83 % / 95 % of
+> RL) in progress: law stopped at step 90 by the step-90 rule (R-law), medicine in its third leg, R-fin-low
+> two legs of three; P7.5's grounded pilot has proposed (83 % / 95 % of
 > proposals kept without / with thinking; 7 / 20 and 1 / 20 of the kept flawed by hand audit); its
 > validity gate, at 8,192 tokens, was cut inside its thinking on half the problems and so dropped 20 of
 > the 32 sound audited ones along with all 8 flawed (F#100); at 32,768 it drops all 8 flawed and 11 of the
@@ -53,7 +54,7 @@ Qwen3.5-4B-Base
   └─ M0  mid-training (finance + law + medicine + general replay + long-CoT anneal)     done
        ├─ S-fin SFT → R-fin RL (DAPO, P6)  ─┐                                            done
        │    └─ R-fin-low (low reasoning effort, per-prompt token budgets)               running
-       ├─ S-law SFT → R-law RL (DAPO, P7)  ─┼─ teachers ─┐                              running
+       ├─ S-law SFT → R-law RL (DAPO, P7)  ─┼─ teachers ─┐                              done (step 90)
        ├─ S-med SFT → R-med RL (DAPO, P7)  ─┘            │                              running
        └─ S-mix SFT (all three) ────────────────────── MOPD ──► Trident-4B              smoke passed
              ├─ baseline: RL on the three-domain mix
@@ -88,7 +89,9 @@ MedMCQA 0.755 → 0.755, CMExam 0.805 → 0.800. Most of the articles gain is th
 general-part articles (article 67 above all), which CAIL never labels and the prompt's own example
 named (F#92), not better legal reading; the English medicine gain is answers that now finish within
 the cap. Law's second leg: articles 0.760, charges 0.779, term 0.564 at step 60 (all 599 rows: 0.595 at
-step 0, 0.672 at 30, 0.701 at 60). The control for F#92 measured what the example cost before RL: on CAIL
+step 0, 0.672 at 30, 0.701 at 60). Third leg: 0.687 / 0.696 / 0.701 at steps 70 / 80 / 90; their mean,
+0.6946, is 0.0099 over the mean at 40 / 50 / 60, and the rule fixed before training runs on to 150 only
+above +0.0100, so law stops at step 90 (a miss of 0.06 of a row, well inside the noise: the rule decides). The control for F#92 measured what the example cost before RL: on CAIL
 test's 339 articles questions S-law scores 0.490 with the prompt as trained and 0.596 / 0.575 with an
 example drawn from the labels (`\boxed{133}`, `\boxed{196、264}`; paired, p ≈ 1e-5 each, unchanged without
 the rows whose label holds the example), and writes general-part articles in 129 answers against 81 / 92.
@@ -109,7 +112,9 @@ rollouts over budget, not the 42 % R-fin's own rollouts predicted: on the same 7
 "Reasoning effort: low." flag alone makes R-fin's answers 0.88× as long at the median, before any training.
 After leg 1 (30 steps at 0.5), val answers are 29 % shorter at the same accuracy (FinQA 0.8136 → 0.8136,
 1,063 → 752 tokens; TAT-QA 0.9399 → 0.9356, 894 → 635), and the rollouts sit at 0.27× their budget, so leg 2
-runs at 0.35 (9.1 % of step 30's rollouts over).
+runs at 0.35 (9.1 % of step 30's rollouts over; step 31 had 9.0 %). After leg 2, val answers are 56-59 %
+shorter than at step 0 (FinQA 0.8065 at 467 tokens, TAT-QA 0.9442 at 370; 445 of 512 right, 446 at step 0)
+and the rollouts sit at 0.17× their budget; leg 3 runs at 0.25, which 3 % of step 60's rollouts exceed.
 
 **Findings worth knowing** (details in docs/failures.md):
 - F#86: the CAIL charges verifier never paid a selective charge (`[走私、贩卖、运输、制造]毒品`);
