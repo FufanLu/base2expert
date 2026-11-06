@@ -36,8 +36,8 @@ small scaling-law fit, data-mix ablations, and chained 8-hour jobs.
 > **Status (2026-11-05):** main line P0, P1, P3, P4 and P6 done; P5 done (four offline methods,
 > and the rubric judge, which agrees with HealthBench physicians as well as they agree with each
 > other: class-balanced F1 0.686 vs 0.689, difference 95 % [−0.021, +0.017]); P7 (law and medicine
-> RL) in progress: law stopped at step 90 by the step-90 rule (R-law), medicine in its third leg, R-fin-low
-> two legs of three; P7.5's grounded pilot has proposed (83 % / 95 % of
+> RL) in progress: law stopped at step 90 by the step-90 rule (R-law), medicine passed it (+0.0172) and trains on to
+> step 150, R-fin-low two legs of three; P7.5's grounded pilot has proposed (83 % / 95 % of
 > proposals kept without / with thinking; 7 / 20 and 1 / 20 of the kept flawed by hand audit); its
 > validity gate, at 8,192 tokens, was cut inside its thinking on half the problems and so dropped 20 of
 > the 32 sound audited ones along with all 8 flawed (F#100); at 32,768 it drops all 8 flawed and 11 of the
@@ -91,7 +91,7 @@ named (F#92), not better legal reading; the English medicine gain is answers tha
 the cap. Law's second leg: articles 0.760, charges 0.779, term 0.564 at step 60 (all 599 rows: 0.595 at
 step 0, 0.672 at 30, 0.701 at 60). Third leg: 0.687 / 0.696 / 0.701 at steps 70 / 80 / 90; their mean,
 0.6946, is 0.0099 over the mean at 40 / 50 / 60, and the rule fixed before training runs on to 150 only
-above +0.0100, so law stops at step 90 (a miss of 0.06 of a row, well inside the noise: the rule decides). The control for F#92 measured what the example cost before RL: on CAIL
+above +0.0100, so law stops at step 90 (a miss of 0.06 of a row, well inside the noise: the rule decides). Medicine (600 rows): 0.767 at step 0, 0.803 at 60, 0.807 / 0.815 / 0.815 at 70 / 80 / 90; that mean, 0.8122, is 0.0172 over the one at 40 / 50 / 60 (CMExam +0.030, MedQA +0.023, MedMCQA −0.002), so medicine goes on to step 150. The control for F#92 measured what the example cost before RL: on CAIL
 test's 339 articles questions S-law scores 0.490 with the prompt as trained and 0.596 / 0.575 with an
 example drawn from the labels (`\boxed{133}`, `\boxed{196、264}`; paired, p ≈ 1e-5 each, unchanged without
 the rows whose label holds the example), and writes general-part articles in 129 answers against 81 / 92.
