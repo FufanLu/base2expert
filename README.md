@@ -60,7 +60,7 @@ Qwen3.5-4B-Base
              ├─ baseline: RL on the three-domain mix
              └─ baseline: TIES / DARE merge of R-fin, R-law, R-med
 R-fin → self-written problems on real filings, validity-gated, three rounds (P7.5)    pilot done, round 1 at the gate
-Side track: nanochat from scratch (tokenizer, d12 smoke); AutoResearch on d8 (two lanes: random control done, LLM researcher running)
+Side track: nanochat from scratch (tokenizer, d12 smoke); AutoResearch on d8 (two lanes: the random control kept 3 changes, the LLM researcher none of 19)
 ```
 
 ## Results so far
