@@ -19,6 +19,9 @@
 # deviations twice, alternating with the best, before keeping it (agent.py).
 # HOURS=1.3 leaves 42 minutes, enough for a round started at 1.3 h to finish
 # its 5 runs.
+# SLOW_TOL=0.05 trains a run again when it made more than 5 % fewer steps than its
+# yardstick's runs (lane 0 shares its GPU with vLLM, F#110); each rerun is 5 more
+# minutes of those 42.
 # LANES=2 (with --gres=gpu:h200:2) runs two lanes at once, lane i on the job's i-th GPU, each
 # with its own baseline and keep rule; POOL_PROB is the chance a round edits a commit kept in
 # either lane instead of its lane's best (agent.py). vLLM stays on the first GPU.
@@ -68,5 +71,5 @@ fi
 "$TR_PY" -P "$CODE/pretrain/autoresearch/agent.py" --repo "$RUN" --python "$NC_PY" --proposer "$PROPOSER" \
   ${URL:+--llm-url "$URL"} --rounds "$ROUNDS" --hours "$HOURS" --seed "${SEED:-0}" \
   --noise-runs "${NOISE_RUNS:-0}" --min-gain "${MIN_GAIN:-0}" --confirm "${CONFIRM:-0}" \
-  --screen-sd "${SCREEN_SD:-1}" --lanes "${LANES:-1}" --pool-prob "${POOL_PROB:-0}" 2>&1 | tee -a "$LOGS/ar_$TAG.log"
+  --screen-sd "${SCREEN_SD:-1}" --slow-tol "${SLOW_TOL:-0}" --lanes "${LANES:-1}" --pool-prob "${POOL_PROB:-0}" 2>&1 | tee -a "$LOGS/ar_$TAG.log"
 for d in "$RUN" "$RUN"-lane*; do [ -f "$d/results.tsv" ] && log "stretch done: $(($(wc -l <"$d/results.tsv") - 1)) rows in $d/results.tsv"; done

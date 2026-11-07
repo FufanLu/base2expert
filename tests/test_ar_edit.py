@@ -1,3 +1,4 @@
+import json
 import sys
 from pathlib import Path
 
@@ -180,3 +181,66 @@ def test_two_lanes_share_the_pool_and_never_train_a_change_twice(tmp_path, monke
     assert kept and all(float(re.search(r"-> ([0-9.e-]+)", r).group(1)) > 0.05 for r in kept)
     # each GPU's noise sequence was consumed by its own lane only
     assert all(len(json.loads((tmp_path / f"noise.json.{dev}").read_text())) < 90 for dev in ("3", "5"))
+
+
+def test_a_run_with_far_fewer_steps_than_its_yardstick_is_slowed():
+    from agent import slowed, steps_by_commit
+
+    jsonl = "\n".join(json.dumps(r) for r in [
+        {"commit": "base", "status": "keep", "num_steps": 977.0},
+        {"commit": "base", "status": "noise", "num_steps": 978.0},
+        {"commit": "base", "status": "slowed", "num_steps": 823.0},  # not a counted run
+        {"commit": "c1", "status": "screen", "num_steps": 979.0},
+        {"commit": "c2", "status": "crash"},
+    ])
+    ref = steps_by_commit(jsonl)
+    assert ref == {"base": [977.0, 978.0], "c1": [979.0]}
+    # nov04-llm2 lane 0: the recheck that made 823 steps against the baseline's ~977 (F#110)
+    assert slowed(823.0, ref["base"], 0.05) and not slowed(940.0, ref["base"], 0.05)
+    assert not slowed(823.0, ref["base"], 0.0)  # off
+    assert not slowed(823.0, [], 0.05) and not slowed(None, ref["base"], 0.05)
+
+
+def test_loop_reruns_a_slowed_run_and_leaves_it_out_of_the_means(tmp_path, monkeypatch):
+    import subprocess
+
+    import agent
+
+    # the stand-in train.py of the confirm test, now also printing its steps: 1000, except the second run
+    # (the first noise run), which makes 800 steps and so a val_bpb 0.02 worse, as a slowed GPU does
+    repo, noise, steps = tmp_path / "repo", tmp_path / "noise.json", tmp_path / "steps.json"
+    repo.mkdir()
+    noise.write_text(json.dumps([0.0, 0.001, -0.001] * 20))
+    steps.write_text(json.dumps([1000, 800] + [1000] * 60))
+    (repo / "train.py").write_text(
+        "MATRIX_LR = 0.04  # learning rate\n"
+        "import json, os, pathlib\n"
+        "def pop(name):\n"
+        "    p = pathlib.Path(os.environ[name])\n"
+        "    seq = json.loads(p.read_text())\n"
+        "    x = seq.pop(0)\n"
+        "    p.write_text(json.dumps(seq))\n"
+        "    return x\n"
+        "x, n = pop('AR_TEST_NOISE'), pop('AR_TEST_STEPS')\n"
+        "print('---')\n"
+        "print(f'val_bpb: {1.0 - (0.01 if MATRIX_LR > 0.05 else 0.0) + x + (0.02 if n < 900 else 0.0):.6f}')\n"
+        "print(f'num_steps: {n}')\n"
+        "print('peak_vram_mb: 1000.0')\n")
+    for cmd in (["init", "-q"], ["config", "user.email", "t@t"], ["config", "user.name", "t"],
+                ["add", "train.py"], ["commit", "-qm", "base"]):
+        subprocess.run(["git", "-C", str(repo), *cmd], check=True)
+    monkeypatch.setenv("AR_TEST_NOISE", str(noise))
+    monkeypatch.setenv("AR_TEST_STEPS", str(steps))
+    monkeypatch.setattr(sys, "argv", ["agent.py", "--repo", str(repo), "--python", sys.executable,
+                                      "--proposer", "random", "--rounds", "7", "--noise-runs", "2",
+                                      "--confirm", "2", "--min-gain", "0.001", "--slow-tol", "0.05"])
+    agent.main()
+
+    rows = [r.split("\t") for r in (repo / "results.tsv").read_text().splitlines()[1:]]
+    status = [r[3] for r in rows]
+    # the slowed run is recorded, trained again, and the baseline still gets its two noise runs
+    assert status[:4] == ["keep", "slowed", "noise", "noise"]
+    assert float(rows[1][1]) > 1.015 and "800 steps against a median of 1000" in rows[1][4]
+    base = agent.runs_by_commit((repo / "results.tsv").read_text())[rows[0][0]]
+    assert max(base) < 1.01  # the slowed run is in neither the mean nor the standard deviation
+    assert status.count("slowed") == 1 and status.count("kept") == 1

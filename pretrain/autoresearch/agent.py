@@ -40,6 +40,17 @@ those best runs by two standard errors of the difference, and by at least
 The standard deviation is pooled over every commit trained more than once in
 this run. runs.jsonl keeps every run's full summary (steps, MFU, seconds).
 
+The budget is wall-clock, so a run slowed by something else on its GPU (the
+researcher's vLLM shares lane 0's: one recheck made 823 steps instead of
+~977 and raised the keep margin, F#110) gets a worse val_bpb that says
+nothing about the code. --slow-tol T marks a run that made more than a
+fraction T fewer steps than the median of its yardstick's counted runs as
+`slowed`, which enters neither a mean nor the standard deviation, and trains
+it again, up to --slow-retries times; the last run stands. A noise, confirm
+or recheck run is measured against its own commit's runs. A change's first
+run has none, so it is measured against the best's and rerun once at most:
+a change that is slower by design is then judged on its second run.
+
     python -P pretrain/autoresearch/agent.py --repo $AR/repo --python $NC_ENV/bin/python \\
         --proposer llm --llm-url http://127.0.0.1:8000 --llm-model qwen3.6 --rounds 15
 """
@@ -53,6 +64,7 @@ import math
 import os
 import random
 import re
+import statistics
 import subprocess
 import sys
 import threading
@@ -184,6 +196,21 @@ def keep_margin(sd: float | None, n_cand: int, n_best: int, min_gain: float) -> 
     return max(min_gain, 2 * sd * math.sqrt(1 / n_cand + 1 / n_best)) if sd else min_gain
 
 
+def steps_by_commit(jsonl_text: str) -> dict[str, list[float]]:
+    """num_steps of each commit's counted runs (RUN_STATUSES) in runs.jsonl."""
+    out: dict[str, list[float]] = {}
+    for line in jsonl_text.splitlines():
+        r = json.loads(line)
+        if r.get("status") in RUN_STATUSES and r.get("num_steps"):
+            out.setdefault(r["commit"], []).append(float(r["num_steps"]))
+    return out
+
+
+def slowed(steps: float | None, yardstick: list[float], tol: float) -> bool:
+    """Whether a run made more than a fraction tol fewer steps than the median of the yardstick's runs."""
+    return bool(tol and steps and yardstick) and steps < (1 - tol) * statistics.median(yardstick)
+
+
 # --- lanes, the candidate pool and the novelty check (--lanes, --pool-prob) ----
 
 def change_key(old: str, new: str) -> list[str]:
@@ -273,6 +300,22 @@ def run_lane(args, lane: int, repo: Path, shared: Shared, program: str, t0: floa
     def train() -> tuple[dict, str]:
         return run_train(repo, args.python, args.timeout, env)
 
+    def train_checked(commit: str, yardstick: str, desc: str, parent: str = "",
+                      retries: int | None = None) -> tuple[dict, str]:
+        """train(); a run slowed against the yardstick commit's runs (--slow-tol) is recorded as `slowed`
+        and trained again, up to retries times (--slow-retries); the last run stands."""
+        retries = args.slow_retries if retries is None else retries
+        for attempt in range(retries + 1):
+            s, tail = train()
+            jsonl = repo / "runs.jsonl"
+            ref = steps_by_commit(jsonl.read_text() if jsonl.exists() else "").get(yardstick, [])
+            if attempt == retries or not slowed(s.get("num_steps"), ref, args.slow_tol):
+                break
+            record(commit, s, "slowed", f"{s['num_steps']:.0f} steps against a median of "
+                   f"{statistics.median(ref):.0f} for {yardstick}; trained again: {desc}", parent)
+            print(f"{tag}slowed run of {commit} ({s['num_steps']:.0f} steps), training it again", flush=True)
+        return s, tail
+
     def best_mean(commit: str) -> float:
         return mean(runs_by_commit(tsv.read_text()).get(commit, []))
 
@@ -290,7 +333,7 @@ def run_lane(args, lane: int, repo: Path, shared: Shared, program: str, t0: floa
                 shared.pool.append(best_commit)
         print(f"{tag}baseline val_bpb {best:.6f}", flush=True)
         for i in range(args.noise_runs):
-            s, _ = train()
+            s, _ = train_checked(best_commit, best_commit, f"baseline repeat {i + 1}")
             record(best_commit, s, "noise", f"baseline repeat {i + 1}")
             done += 1
             print(f"{tag}baseline repeat {i + 1}: val_bpb {s.get('val_bpb', 0):.6f}", flush=True)
@@ -343,7 +386,7 @@ def run_lane(args, lane: int, repo: Path, shared: Shared, program: str, t0: floa
         (repo / "train.py").write_text(new_source)
         git(repo, "commit", "-qam", desc or "experiment")
         commit = git(repo, "rev-parse", "--short=7", "HEAD")
-        s, tail = train()
+        s, tail = train_checked(commit, best_commit, desc, parent, retries=1)
         if "val_bpb" not in s and args.proposer == "llm":  # one repair attempt
             fix = llm_propose(args, program, new_source, shared.results(),
                               f"Your last change crashed. End of the log:\n```\n{tail}\n```\nFix the crash with "
@@ -354,7 +397,7 @@ def run_lane(args, lane: int, repo: Path, shared: Shared, program: str, t0: floa
                 (repo / "train.py").write_text(apply(new_source, fb))
                 git(repo, "commit", "-qam", f"fix: {desc}")
                 commit = git(repo, "rev-parse", "--short=7", "HEAD")
-                s, tail = train()
+                s, tail = train_checked(commit, best_commit, desc, parent, retries=1)
             except EditError:
                 pass
         row_desc = desc
@@ -372,7 +415,7 @@ def run_lane(args, lane: int, repo: Path, shared: Shared, program: str, t0: floa
                 for c, vals, st, d in ((best_commit, base, "recheck", f"best again, alongside: {desc}"),
                                        (commit, cand, "confirm", desc)):
                     git(repo, "checkout", "-q", c, "--", "train.py")
-                    r, tail = train()
+                    r, tail = train_checked(c, c, d, parent)
                     record(c, r, st, d, parent)
                     if "val_bpb" in r:
                         vals.append(r["val_bpb"])
@@ -425,6 +468,9 @@ def main() -> None:
     ap.add_argument("--confirm", type=int, default=0, help="re-runs of a candidate that passes the screen (0: one run)")
     ap.add_argument("--screen-sd", type=float, default=1.0,
                     help="with --confirm: standard deviations below the best's mean the first run must be")
+    ap.add_argument("--slow-tol", type=float, default=0.0,
+                    help="train a run again when it made this fraction fewer steps than its yardstick's (0: off)")
+    ap.add_argument("--slow-retries", type=int, default=2, help="with --slow-tol: reruns of a slowed run")
     ap.add_argument("--lanes", type=int, default=1, help="lanes run in parallel, lane i on CUDA device i")
     ap.add_argument("--pool-prob", type=float, default=0.0,
                     help="chance that a round edits a commit kept in any lane instead of its own lane's best")

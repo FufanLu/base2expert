@@ -25,7 +25,9 @@ kept change), `noise` (the unchanged baseline trained again, to measure run-to-r
 `crash`, `invalid` (the edit could not be applied); and for a change whose first run looked better,
 `screen` (that first run), `confirm` (the change trained again), `recheck` (the best version trained again
 alongside it), then one decision row, `kept` or `rejected`, with the change's mean; `duplicate` marks a
-proposal that changed exactly the lines an earlier experiment changed, which is not trained again.
+proposal that changed exactly the lines an earlier experiment changed, which is not trained again;
+`slowed` marks a run that made far fewer steps than that code usually does because something else
+slowed its GPU: it counts for nothing and is trained again.
 Propose **one** experiment: one idea, so that its effect can be read from its runs.
 
 Two lanes may run at once, one per GPU, each with its own results table (`# lane 0`, `# lane 1`). The
