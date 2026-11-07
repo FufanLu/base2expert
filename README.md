@@ -94,7 +94,9 @@ step 0, 0.672 at 30, 0.701 at 60). Third leg: 0.687 / 0.696 / 0.701 at steps 70 
 above +0.0100, so law stops at step 90 (a miss of 0.06 of a row, well inside the noise: the rule decides). Medicine (600 rows): 0.767 at step 0, 0.803 at 60, 0.807 / 0.815 / 0.815 at 70 / 80 / 90; that mean, 0.8122, is 0.0172 over the one at 40 / 50 / 60 (CMExam +0.030, MedQA +0.023, MedMCQA −0.002), so medicine goes on to step 150. Steps 100 / 110 / 120: 0.800 / 0.812 / 0.803, a mean 0.0072 under 70-90 (4.3 rows, inside the noise); the plan holds. The control for F#92 measured what the example cost before RL: on CAIL
 test's 339 articles questions S-law scores 0.490 with the prompt as trained and 0.596 / 0.575 with an
 example drawn from the labels (`\boxed{133}`, `\boxed{196、264}`; paired, p ≈ 1e-5 each, unchanged without
-the rows whose label holds the example), and writes general-part articles in 129 answers against 81 / 92.
+the rows whose label holds the example), and writes general-part articles in 129 answers against 81 / 92. R-law, the same test: 0.758 / 0.767 / 0.767
+(p 0.63, 0.58), general-part articles in 14 / 4 / 7: after RL the example no longer matters, and 0.162 of
+R-law's 0.268 over S-law is beyond what a better example gives S-law.
 
 **R-fin against its thinking budget** (budget forcing: the thinking is closed at B tokens, then the
 answer is written; FinQA test 1,147 / TAT-QA test 739):
