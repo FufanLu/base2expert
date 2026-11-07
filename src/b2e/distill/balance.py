@@ -21,14 +21,20 @@ done (P8 compares one change at a time).
 
 How it is wired into verl 0.9.1, installed by cluster/mopd_site/sitecustomize.py when
 B2E_MOPD_BALANCE is "share" or "gap":
-- in the TaskRunner, RayPPOTrainer._update_actor is wrapped: before the update it puts one weight
-  per sample into the batch, from the routing key and response length (and for "gap" the
-  rollout-time per-token losses, verl's estimator between old_log_probs and the teacher's
-  log-probs);
+- in the TaskRunner, the trainer's _update_actor is wrapped: before the update it gives every
+  sample one weight, from the routing key and response length (and for "gap" the rollout-time
+  per-token losses, verl's estimator between old_log_probs and the teacher's log-probs). verl
+  0.9.1 runs its V1 trainer by default (trainer.use_v1, TaskRunnerV1): PPOTrainer in
+  verl.trainer.ppo.v1.trainer_base, whose batch is a KVBatchMeta, keys into TransferQueue, so the
+  weights are put there as a field the actor worker then reads. The legacy RayPPOTrainer is
+  patched too, putting them into the DataProto. Patching only the legacy one left the 11-07 gap
+  smoke unweighted with no error, since its check sat in a wrapper that never ran (F#113);
 - in the actor worker, every registered distillation loss is wrapped to multiply its per-token
-  losses by the sample's weight. verl clamps per-token losses at loss_max_clamp after the loss
-  function returns, which would cut the weighted values, so a weighted run sets loss_max_clamp
-  to null and the wrapper clamps the unweighted losses at RAW_CLAMP (verl's default) itself.
+  losses by the sample's weight, and to stop when a sample has none: with the wrapper installed
+  every training loss must be weighted, whichever trainer ran. verl clamps per-token losses at
+  loss_max_clamp after the loss function returns, which would cut the weighted values, so a
+  weighted run sets loss_max_clamp to null and the wrapper clamps the unweighted losses at
+  RAW_CLAMP (verl's default) itself.
 """
 
 from __future__ import annotations
@@ -49,7 +55,8 @@ DECAY = 0.9
 RAW_CLAMP = 10.0
 WEIGHT = "b2e_domain_weight"  # per-sample weight, a key of the batch
 APPLIED = "b2e/weighted"  # set by the loss wrapper; the trainer checks it came back
-TRAINER = "verl.trainer.ppo.ray_trainer"
+TRAINER = "verl.trainer.ppo.ray_trainer"  # the legacy trainer (trainer.use_v1=false)
+TRAINER_V1 = "verl.trainer.ppo.v1.trainer_base"
 LOSSES = "verl.trainer.distillation.losses"
 
 
@@ -160,6 +167,88 @@ def patch_trainer(module: ModuleType) -> None:
           file=sys.stderr, flush=True)
 
 
+def padded(t, value=0):
+    """A nested (jagged) tensor as a padded one; a padded tensor as it is."""
+    return t.to_padded_tensor(value) if getattr(t, "is_nested", False) else t
+
+
+def as_list(v) -> list:
+    """A TransferQueue non-tensor field (NonTensorStack) or a list, as a list."""
+    return v.tolist() if hasattr(v, "tolist") else list(v)
+
+
+def v1_inputs(trainer, data, mode: str) -> tuple[list[float], list[float] | None]:
+    """Each sample's response length and, for "gap", its summed rollout-time |loss|, from the fields
+    the V1 trainer reads out of TransferQueue (nested tensors there, one row per sample)."""
+    mask = padded(data["response_mask"]).float()
+    if mode != "gap":
+        return mask.sum(-1).tolist(), None
+    from verl.trainer.ppo.core_algos import kl_penalty
+    from verl.workers.utils.padding import no_padding_2_padding
+
+    cfg = trainer.distillation_config.distillation_loss
+    if cfg.loss_settings.use_topk:
+        raise NotImplementedError("gap weights need the teacher's log-prob of the sampled token; a top-k loss is "
+                                  "computed in the actor from the student's logits, so use B2E_MOPD_BALANCE=share")
+    # teacher_logprobs cover prompt + response; no_padding_2_padding takes the response's, shifted by one
+    # token as the actor's loss does, padded to the batch's longest response like old_log_probs here
+    teacher = no_padding_2_padding(data["teacher_logprobs"], data).squeeze(-1)
+    losses = kl_penalty(logprob=padded(data["old_log_probs"], 0.0), ref_logprob=teacher, kl_penalty=cfg.loss_mode)
+    return mask.sum(-1).tolist(), (losses.clamp(-RAW_CLAMP, RAW_CLAMP).abs() * mask).sum(-1).tolist()
+
+
+def weight_field(w: list[float]):
+    import torch
+    from tensordict import TensorDict
+
+    return TensorDict({WEIGHT: torch.tensor(w, dtype=torch.float32)}, batch_size=[len(w)])
+
+
+def patch_trainer_v1(module: ModuleType) -> None:
+    cls = module.PPOTrainer
+    update = cls._update_actor
+    running = RunningGap()
+
+    @functools.wraps(update)
+    def _update_actor(self, batch, metrics):
+        mode = os.environ["B2E_MOPD_BALANCE"]
+        key = self.distillation_config.teacher_key
+        fields = [key, "prompts", "responses", "response_mask"]
+        if mode == "gap":
+            fields += ["old_log_probs", "teacher_logprobs"]
+        data = module.tq.kv_batch_get(keys=batch.keys, partition_id=batch.partition_id, select_fields=fields)
+        lengths, sums = v1_inputs(self, data, mode)
+        # samples copied in to make the batch divisible (tag is_padding) count in no domain's share
+        real = [not t.get("is_padding", False) for t in batch.tags]
+        lengths = [n if r else 0.0 for n, r in zip(lengths, real, strict=True)]
+        if sums is not None:
+            sums = [x if r else 0.0 for x, r in zip(sums, real, strict=True)]
+        w, m = sample_weights([str(k) for k in as_list(data[key])], lengths, mode, running, sums)
+        module.tq.kv_batch_put(keys=batch.keys, partition_id=batch.partition_id, fields=weight_field(w))
+        if batch.fields is not None:  # the actor reads only the fields listed, when there is a list
+            listed = [batch.fields] if isinstance(batch.fields, str) else list(batch.fields)
+            batch.fields = listed + ([WEIGHT] if WEIGHT not in listed else [])
+        out = update(self, batch, metrics)
+        if not any(k.endswith(APPLIED) for k in metrics):  # the actor never saw the weights: stop
+            raise RuntimeError("b2e: the distillation loss was not weighted; is the loss patch installed in the actor?")
+        metrics.update(m)
+        return out
+
+    cls._update_actor = _update_actor
+    print(f"b2e: {module.__name__} patched, MOPD loss weights ({os.environ.get('B2E_MOPD_BALANCE')})",
+          file=sys.stderr, flush=True)
+
+
+def applied_metric():
+    """The value the loss wrapper logs as APPLIED: verl's Metric where verl has one (its V1 actor
+    aggregates Metric objects), else a number."""
+    try:
+        from verl.utils.metric import AggregationType, Metric
+    except ImportError:
+        return 1.0
+    return Metric(AggregationType.MEAN, 1.0)
+
+
 def weighted(fn):
     """A registered distillation loss whose per-token losses are scaled by the sample's weight."""
 
@@ -168,13 +257,14 @@ def weighted(fn):
         losses, metrics = fn(config=config, distillation_config=distillation_config, model_output=model_output,
                              data=data)
         w = data.get(WEIGHT, None)
-        if w is None:
-            return losses, metrics
+        if w is None:  # installed means weighted: a loss without weights is a trainer that was not patched
+            raise RuntimeError(f"b2e: B2E_MOPD_BALANCE is set but the batch has no {WEIGHT}; the trainer that ran "
+                               "was not patched (F#113)")
         if distillation_config.distillation_loss.loss_max_clamp is not None:
             raise ValueError("weighted distillation losses need distillation.distillation_loss.loss_max_clamp=null "
                              f"(the weights are applied after a clamp at {RAW_CLAMP})")
         losses = losses.clamp(-RAW_CLAMP, RAW_CLAMP) * w.to(device=losses.device, dtype=losses.dtype).unsqueeze(-1)
-        metrics[APPLIED] = 1.0
+        metrics[APPLIED] = applied_metric()
         return losses, metrics
 
     return loss_fn
@@ -193,4 +283,5 @@ def install() -> None:
     if mode not in MODES:
         raise ValueError(f"B2E_MOPD_BALANCE must be one of {MODES}, got {mode!r}")
     on_import(TRAINER, patch_trainer)
+    on_import(TRAINER_V1, patch_trainer_v1)
     on_import(LOSSES, patch_losses)
