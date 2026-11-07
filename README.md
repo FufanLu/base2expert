@@ -37,7 +37,7 @@ small scaling-law fit, data-mix ablations, and chained 8-hour jobs.
 > and the rubric judge, which agrees with HealthBench physicians as well as they agree with each
 > other: class-balanced F1 0.686 vs 0.689, difference 95 % [−0.021, +0.017]); P7 (law and medicine
 > RL) in progress: law stopped at step 90 by the step-90 rule (R-law), medicine passed it (+0.0172) and trains on to
-> step 150 and peaked at 70-90 (R-med = step 90 by the window rule), R-fin-low done (step 90, exported); P7.5's grounded pilot has proposed (83 % / 95 % of
+> step 150 and peaked at 70-90 (R-med = step 90 by the window rule; with thinking MedQA test 0.779 → 0.859, MedMCQA 0.665 → 0.690, CMExam 0.791 → 0.798, law held), R-fin-low done (step 90, exported); P7.5's grounded pilot has proposed (83 % / 95 % of
 > proposals kept without / with thinking; 7 / 20 and 1 / 20 of the kept flawed by hand audit); its
 > validity gate, at 8,192 tokens, was cut inside its thinking on half the problems and so dropped 20 of
 > the 32 sound audited ones along with all 8 flawed (F#100); at 32,768 it drops all 8 flawed and 11 of the
