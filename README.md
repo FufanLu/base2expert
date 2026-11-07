@@ -121,6 +121,10 @@ shorter than at step 0 (FinQA 0.8065 at 467 tokens, TAT-QA 0.9442 at 370; 445 of
 and the rollouts sit at 0.17× their budget; leg 3 runs at 0.25, which 3 % of step 60's rollouts exceed.
 After leg 3, 444 of 512 right at step 90 (446 at step 0); 5.3 % of step 61's rollouts went over × 0.25 and
 0.3 % of step 70's, and on shared prompts R-fin-low's answers are 0.24-0.27× R-fin's length at the median.
+**Asked as trained (the low-effort message), R-fin-low scores FinQA test 0.813 at 344 tokens and TAT-QA test
+0.939 at 261, against R-fin's 0.813 at 1,129 and 0.943 at 988 (paired p 1 and 0.61), and beats R-fin cut at
+128 thinking tokens, as long or longer, 0.790 and 0.919 (p 0.0016 and 0.0026).** The message alone shortens R-fin
+by 5-6 %.
 
 **Findings worth knowing** (details in docs/failures.md):
 - F#86: the CAIL charges verifier never paid a selective charge (`[走私、贩卖、运输、制造]毒品`);
