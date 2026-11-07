@@ -9,6 +9,9 @@ between two greedy runs of the same model (docs/runs.md, 11343461/62).
 --budgets B1 B2 ... evaluates with the thinking cut at each budget instead
 (b2e.eval.budget; thinking on, --answer-tokens for the answer after it), one
 entry per set and budget, for the accuracy-vs-budget curves of P7.
+--low-effort puts R-fin-low's low-effort system message (b2e.data.effort_pool,
+the text it was trained with) before every prompt, for evaluating a model the
+way R-fin-low is meant to be asked.
 
     python -P -m b2e.eval.run_eval --model /tmp/b2e-models/Qwen3.5-4B-Base-chat \\
         --data finqa_test.parquet tatqa_dev.parquet --out results/base --thinking false --repeats 2
@@ -24,9 +27,17 @@ from pathlib import Path
 
 import pandas as pd
 
+from b2e.data.effort_pool import LOW_EFFORT
 from b2e.eval import budget as budget_forcing
 from b2e.prompts import fits
 from b2e.reward.score import compute_score
+
+
+def with_system(prompt: list[dict], text: str) -> list[dict]:
+    """The prompt with a system message first; a prompt that has one already is refused."""
+    if any(m["role"] == "system" for m in prompt):
+        raise ValueError("the prompt already has a system message")
+    return [{"role": "system", "content": text}, *prompt]
 
 
 def main() -> None:
@@ -43,6 +54,7 @@ def main() -> None:
     ap.add_argument("--max-model-len", type=int, default=16384)
     ap.add_argument("--budgets", type=int, nargs="*", default=[], help="thinking budgets in tokens")
     ap.add_argument("--answer-tokens", type=int, default=1024, help="the answer's tokens after a budget")
+    ap.add_argument("--low-effort", action="store_true", help="R-fin-low's system message before every prompt")
     args = ap.parse_args()
     if args.budgets and args.thinking != "true":
         ap.error("--budgets needs --thinking true")
@@ -53,13 +65,16 @@ def main() -> None:
     out.mkdir(parents=True, exist_ok=True)
     llm = LLM(model=args.model, gpu_memory_utilization=args.gpu_mem, max_model_len=args.max_model_len,
               enable_prefix_caching=True)
-    summary = {"model": args.model, "thinking": args.thinking, "temperature": args.temperature, "sets": {}}
+    summary = {"model": args.model, "thinking": args.thinking, "temperature": args.temperature,
+               "system": LOW_EFFORT if args.low_effort else None, "sets": {}}
     # (path, budget): budget None is the usual generation with --max-tokens
     jobs = [(p, b) for p in args.data for b in (args.budgets or [None])]
     for path, budget in jobs:
         df = pd.read_parquet(path)
         if args.limit:
             df = df.head(args.limit)
+        if args.low_effort:
+            df["prompt"] = [with_system(list(p), LOW_EFFORT) for p in df["prompt"]]
         name = Path(path).stem + (f"@b{budget}" if budget else "")
         tok = llm.get_tokenizer()
         max_new = budget + args.answer_tokens if budget else args.max_tokens
