@@ -96,7 +96,9 @@ test's 339 articles questions S-law scores 0.490 with the prompt as trained and 
 example drawn from the labels (`\boxed{133}`, `\boxed{196、264}`; paired, p ≈ 1e-5 each, unchanged without
 the rows whose label holds the example), and writes general-part articles in 129 answers against 81 / 92. R-law, the same test: 0.758 / 0.767 / 0.767
 (p 0.63, 0.58), general-part articles in 14 / 4 / 7: after RL the example no longer matters, and 0.162 of
-R-law's 0.268 over S-law is beyond what a better example gives S-law.
+R-law's 0.268 over S-law is beyond what a better example gives S-law. With thinking, R-law scores CAIL2018 test
+0.718 against S-law's 0.542 at 1,522 tokens against 2,454, and medicine, untrained, holds (MedQA 0.797,
+MedMCQA 0.669, CMExam 0.773 against 0.784 / 0.660 / 0.766); its law val rows score 0.7005, the training log's.
 
 **R-fin against its thinking budget** (budget forcing: the thinking is closed at B tokens, then the
 answer is written; FinQA test 1,147 / TAT-QA test 739):
