@@ -33,15 +33,15 @@ A side track pre-trains a 0.56B bilingual model from scratch with
 [nanochat](https://github.com/karpathy/nanochat). It covers the tokenizer, a
 small scaling-law fit, data-mix ablations, and chained 8-hour jobs.
 
-> **Status (2026-11-06):** main line P0, P1, P3, P4 and P6 done; P5 done (four offline methods,
+> **Status (2026-11-07):** main line P0, P1, P3, P4 and P6 done; P5 done (four offline methods,
 > and the rubric judge, which agrees with HealthBench physicians as well as they agree with each
 > other: class-balanced F1 0.686 vs 0.689, difference 95 % [−0.021, +0.017]); P7 (law and medicine
 > RL) in progress: law stopped at step 90 by the step-90 rule (R-law), medicine passed it (+0.0172) and trains on to
-> step 150, R-fin-low two legs of three; P7.5's grounded pilot has proposed (83 % / 95 % of
+> step 150 (leg 5 queued), R-fin-low done (step 90, exported); P7.5's grounded pilot has proposed (83 % / 95 % of
 > proposals kept without / with thinking; 7 / 20 and 1 / 20 of the kept flawed by hand audit); its
 > validity gate, at 8,192 tokens, was cut inside its thinking on half the problems and so dropped 20 of
 > the 32 sound audited ones along with all 8 flawed (F#100); at 32,768 it drops all 8 flawed and 11 of the
-> 32 sound (Fisher p 0.00098), leaving 87 + 84 usable problems (valid and mixed); round 1 kept 5,688 of 10,000 proposals (2,638 duplicates) and R-fin's pass rate left 1,128 mixed (19.8 %; 30.5 % never solved, 49.7 % always right), next at the gate; the P8 code (teacher sharing, Open-MOPD weights, weight merging)
+> 32 sound (Fisher p 0.00098), leaving 87 + 84 usable problems (valid and mixed); round 1 kept 5,688 of 10,000 proposals (2,638 duplicates) and R-fin's pass rate left 1,128 mixed (19.8 %; 30.5 % never solved, 49.7 % always right); the gate kept 346 (30.7 %), a hand audit of 20 found 1 flawed (within the scorer's tolerance) and 3 ambiguous, and round 1's RL (20 steps on 515 problems) is queued; the P8 code (teacher sharing, Open-MOPD weights, weight merging)
 > are written, their GPU runs queued; R-fin's thinking-budget curve is measured (below); P9 not started. Side track: tokenizer, data shards and a d12 smoke so far. Only measured numbers appear
 > below, each with its job in [docs/runs.md](docs/runs.md); every failure, including my own
 > mistakes, is in [docs/failures.md](docs/failures.md); the stage plan is in
@@ -53,13 +53,13 @@ small scaling-law fit, data-mix ablations, and chained 8-hour jobs.
 Qwen3.5-4B-Base
   └─ M0  mid-training (finance + law + medicine + general replay + long-CoT anneal)     done
        ├─ S-fin SFT → R-fin RL (DAPO, P6)  ─┐                                            done
-       │    └─ R-fin-low (low reasoning effort, per-prompt token budgets)               running
+       │    └─ R-fin-low (low reasoning effort, per-prompt token budgets)               done
        ├─ S-law SFT → R-law RL (DAPO, P7)  ─┼─ teachers ─┐                              done (step 90)
        ├─ S-med SFT → R-med RL (DAPO, P7)  ─┘            │                              running
        └─ S-mix SFT (all three) ────────────────────── MOPD ──► Trident-4B              smoke passed
              ├─ baseline: RL on the three-domain mix
              └─ baseline: TIES / DARE merge of R-fin, R-law, R-med
-R-fin → self-written problems on real filings, validity-gated, three rounds (P7.5)    pilot done, round 1 at the gate
+R-fin → self-written problems on real filings, validity-gated, three rounds (P7.5)    pilot done, round 1 RL queued
 Side track: nanochat from scratch (tokenizer, d12 smoke); AutoResearch on d8 (two lanes: the random control kept 3 changes, the LLM researcher none of 19)
 ```
 
@@ -91,7 +91,7 @@ named (F#92), not better legal reading; the English medicine gain is answers tha
 the cap. Law's second leg: articles 0.760, charges 0.779, term 0.564 at step 60 (all 599 rows: 0.595 at
 step 0, 0.672 at 30, 0.701 at 60). Third leg: 0.687 / 0.696 / 0.701 at steps 70 / 80 / 90; their mean,
 0.6946, is 0.0099 over the mean at 40 / 50 / 60, and the rule fixed before training runs on to 150 only
-above +0.0100, so law stops at step 90 (a miss of 0.06 of a row, well inside the noise: the rule decides). Medicine (600 rows): 0.767 at step 0, 0.803 at 60, 0.807 / 0.815 / 0.815 at 70 / 80 / 90; that mean, 0.8122, is 0.0172 over the one at 40 / 50 / 60 (CMExam +0.030, MedQA +0.023, MedMCQA −0.002), so medicine goes on to step 150. The control for F#92 measured what the example cost before RL: on CAIL
+above +0.0100, so law stops at step 90 (a miss of 0.06 of a row, well inside the noise: the rule decides). Medicine (600 rows): 0.767 at step 0, 0.803 at 60, 0.807 / 0.815 / 0.815 at 70 / 80 / 90; that mean, 0.8122, is 0.0172 over the one at 40 / 50 / 60 (CMExam +0.030, MedQA +0.023, MedMCQA −0.002), so medicine goes on to step 150. Steps 100 / 110 / 120: 0.800 / 0.812 / 0.803, a mean 0.0072 under 70-90 (4.3 rows, inside the noise); the plan holds. The control for F#92 measured what the example cost before RL: on CAIL
 test's 339 articles questions S-law scores 0.490 with the prompt as trained and 0.596 / 0.575 with an
 example drawn from the labels (`\boxed{133}`, `\boxed{196、264}`; paired, p ≈ 1e-5 each, unchanged without
 the rows whose label holds the example), and writes general-part articles in 129 answers against 81 / 92.
@@ -115,6 +115,8 @@ After leg 1 (30 steps at 0.5), val answers are 29 % shorter at the same accuracy
 runs at 0.35 (9.1 % of step 30's rollouts over; step 31 had 9.0 %). After leg 2, val answers are 56-59 %
 shorter than at step 0 (FinQA 0.8065 at 467 tokens, TAT-QA 0.9442 at 370; 445 of 512 right, 446 at step 0)
 and the rollouts sit at 0.17× their budget; leg 3 runs at 0.25, which 3 % of step 60's rollouts exceed.
+After leg 3, 444 of 512 right at step 90 (446 at step 0); 5.3 % of step 61's rollouts went over × 0.25 and
+0.3 % of step 70's, and on shared prompts R-fin-low's answers are 0.24-0.27× R-fin's length at the median.
 
 **Findings worth knowing** (details in docs/failures.md):
 - F#86: the CAIL charges verifier never paid a selective charge (`[走私、贩卖、运输、制造]毒品`);
