@@ -372,20 +372,22 @@ def main() -> None:
         msgs = [grounded_messages(d, h) for d, h in zip(docs, hints, strict=True)]
     else:
         msgs = [proposer_messages(rng) for _ in range(args.n)]
-    # a real excerpt can run to a few thousand tokens before the answer starts
-    llm = LLM(model=args.model, gpu_memory_utilization=0.85, max_model_len=16384 if docs else 8192,
-              enable_prefix_caching=True)
-    outs = llm.chat(msgs, SamplingParams(temperature=args.temperature, max_tokens=args.max_tokens, seed=args.seed),
-                    chat_template_kwargs={"enable_thinking": args.thinking})
+    # every input is read before the model loads and generates, so a wrong path fails in seconds,
+    # not after the whole round's proposals (F#114: a relative PRIOR path, found after generation)
+    prior = prior_problems([r for p in args.prior for r in pd.read_parquet(p).to_dict("records")])
     index = None
     if args.decontam_index:
         from b2e.data.decontam import ItemNgramIndex
 
         index = ItemNgramIndex(args.decontam_index)
+    # a real excerpt can run to a few thousand tokens before the answer starts
+    llm = LLM(model=args.model, gpu_memory_utilization=0.85, max_model_len=16384 if docs else 8192,
+              enable_prefix_caching=True)
+    outs = llm.chat(msgs, SamplingParams(temperature=args.temperature, max_tokens=args.max_tokens, seed=args.seed),
+                    chat_template_kwargs={"enable_thinking": args.thinking})
     texts = [o.outputs[0].text for o in outs]
     outcomes: list[str] = []
     if docs is not None:
-        prior = prior_problems([r for p in args.prior for r in pd.read_parquet(p).to_dict("records")])
         rows, stats = filter_grounded(texts, docs, args.round, prior, index, thinking=args.thinking,
                                       outcomes=outcomes)
     else:
