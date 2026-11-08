@@ -3,7 +3,7 @@
 # One run has one max_response_length, so it is medicine's 8,192, and b2e.reward.caps.CappedDAPO
 # gives each row its expert's reward: the response cut at that domain's cap, DAPO's overlong zone
 # before it. The fin_low rows (the low-effort flag) are scored by R-fin-low's budget reward
-# (b2e.reward.budget; B2E_BUDGET_MULT per leg, 0.5 / 0.35 / 0.25 by thirds of the run, as R-fin-low's
+# (b2e.reward.budget; B2E_BUDGET_MULT per leg, 0.5 / 0.35 / 0.25 by leg, as R-fin-low's
 # legs); the other rows carry no budget and get their verifier's score.
 #   B2E_BUDGET_MULT=0.5 LEG_STEPS=<a third> cluster/submit_rl.sh dapo_mix s_mix mopd_p8 1
 hydra:
@@ -47,7 +47,7 @@ data:
 
 trainer:
   experiment_name: dapo_mix
-  # 12 H200-hours on one GPU as three legs of about 4 h (B2E_BUDGET_MULT 0.5 / 0.35 / 0.25): the smoke
-  # (11700701) took 711-893 s a step, so legs of 16 steps; the last leg is resized from the first two's
-  # sacct time to fill the budget (docs/runs.md)
-  total_training_steps: 48
+  # 12 H200-hours on one GPU in three legs (B2E_BUDGET_MULT 0.5 / 0.35 / 0.25). The smoke (11700701)
+  # took 711-893 s a step, so legs 1-2 were 16 steps; they took 2:53:26 and 2:15:40 by sacct (410-620 s
+  # a step), so leg 3 is the 48 steps that fit the 6:50:54 left (docs/runs.md)
+  total_training_steps: 80
