@@ -39,6 +39,7 @@ distillation:
 
 trainer:
   experiment_name: mopd
-  # provisional: the budget is 12 H200-hours (three gpu-short legs); the step count is set from the
-  # full-scale smoke's step time before the run (docs/runs.md)
-  total_training_steps: 100
+  # a cap, not the length: the run is gpu-short legs (LEG_STEPS) until 12 H200-hours by sacct. The
+  # full-scale smoke (11706942) took 20 min to start and 104-137 s a step after the first (298 s), so
+  # leg 1 is 30 steps and the later legs are sized from its time (docs/runs.md)
+  total_training_steps: 150

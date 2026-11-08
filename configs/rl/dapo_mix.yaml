@@ -47,5 +47,7 @@ data:
 
 trainer:
   experiment_name: dapo_mix
-  # provisional: 12 H200-hours, the step count set from its smoke's step time before the run
-  total_training_steps: 90
+  # 12 H200-hours on one GPU as three legs of about 4 h (B2E_BUDGET_MULT 0.5 / 0.35 / 0.25): the smoke
+  # (11700701) took 711-893 s a step, so legs of 16 steps; the last leg is resized from the first two's
+  # sacct time to fill the budget (docs/runs.md)
+  total_training_steps: 48
