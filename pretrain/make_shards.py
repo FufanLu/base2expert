@@ -12,13 +12,17 @@ mixed by UTF-8 bytes (bits per byte is the metric, so bytes are the budget):
 
 Documents are interleaved by a seeded weighted draw, so every shard has the
 same mix and the validation shard matches training. A manifest.json records
-sources, weights, documents and bytes per source.
+sources, weights, documents and bytes per source. --exclude drops every
+document whose text equals one in the given parquet files (e.g. the M0
+held-out documents, data/cpt/m0/heldout/*.parquet, so a model trained on the
+shards can be scored on them); the drops per source go in the manifest.
 """
 
 from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import json
 import random
 from collections.abc import Iterator
@@ -30,14 +34,24 @@ import pyarrow.parquet as pq
 ROW_GROUP = 1024
 
 
-def docs(files: list[str], column: str = "text") -> Iterator[str]:
+def text_hash(t: str) -> bytes:
+    return hashlib.sha1(t.encode()).digest()
+
+
+def docs(files: list[str], column: str = "text", exclude: frozenset[bytes] = frozenset(),
+         dropped: dict[str, int] | None = None) -> Iterator[str]:
     for f in files:
         pf = pq.ParquetFile(f)
         col = column if column in pf.schema_arrow.names else pf.schema_arrow.names[0]
         for i in range(pf.num_row_groups):
             for t in pf.read_row_group(i, columns=[col]).column(col).to_pylist():
-                if t:
-                    yield t
+                if not t:
+                    continue
+                if exclude and text_hash(t) in exclude:
+                    if dropped is not None:
+                        dropped["n"] = dropped.get("n", 0) + 1
+                    continue
+                yield t
 
 
 def parse_source(s: str) -> tuple[str, float, list[str]]:
@@ -57,12 +71,18 @@ def main() -> None:
     ap.add_argument("--val-bytes", type=float, default=50e6)
     ap.add_argument("--total-bytes", type=float, default=0, help="stop after this many training bytes (0: until a source runs out)")
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--exclude", action="append", default=[], help="glob of parquet files whose documents are left out")
     args = ap.parse_args()
 
     sources = [parse_source(s) for s in args.source]
     names = [n for n, _, _ in sources]
     weights = [w for _, w, _ in sources]
-    iters = {n: docs(f) for n, _, f in sources}
+    ex_files = sorted({f for g in args.exclude for f in glob.glob(g)})
+    if args.exclude and not ex_files:
+        raise SystemExit(f"no files match {args.exclude}")
+    exclude = frozenset(text_hash(t) for f in ex_files for t in docs([f]))
+    dropped: dict[str, dict[str, int]] = {n: {} for n in names}
+    iters = {n: docs(f, exclude=exclude, dropped=dropped[n]) for n, _, f in sources}
     rng = random.Random(args.seed)
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
@@ -112,7 +132,8 @@ def main() -> None:
     (out / "manifest.json").write_text(json.dumps({
         "sources": {n: {"weight": w, "files": f} for n, w, f in sources},
         "seed": args.seed, "train_shards": shards, "val_file": "shard_99999.parquet",
-        "per_source": stats,
+        "per_source": stats, "exclude": {"files": ex_files, "documents": len(exclude),
+                                         "dropped": {n: d.get("n", 0) for n, d in dropped.items()}},
     }, indent=2, ensure_ascii=False))
     print(json.dumps({"train_shards": len(shards), "train_bytes": trained, "per_source": stats}, ensure_ascii=False))
 

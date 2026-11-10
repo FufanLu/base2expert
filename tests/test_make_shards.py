@@ -26,3 +26,20 @@ def test_mix_by_bytes(tmp_path: Path):
     t = pq.read_table(out / "shard_00000.parquet")
     assert t.column_names == ["text"]
     assert r.returncode == 0
+
+
+def test_exclude_drops_held_out_documents(tmp_path: Path):
+    (tmp_path / "src").mkdir()
+    texts = [f"document number {i} " * 10 for i in range(300)]
+    pq.write_table(pa.table({"text": texts}), tmp_path / "src" / "a.parquet")
+    pq.write_table(pa.table({"text": texts[:40]}), tmp_path / "heldout.parquet")
+    out = tmp_path / "out"
+    subprocess.run([sys.executable, "pretrain/make_shards.py", "--out", str(out),
+                    "--source", f"all=1.0:{tmp_path}/src/*.parquet", "--exclude", str(tmp_path / "heldout.parquet"),
+                    "--shard-bytes", "20000", "--val-bytes", "5000"],
+                   capture_output=True, text=True, check=True)
+    m = json.loads((out / "manifest.json").read_text())
+    assert m["exclude"]["documents"] == 40
+    assert m["exclude"]["dropped"] == {"all": 40}
+    written = [t for p in out.glob("*.parquet") for t in pq.read_table(p).column("text").to_pylist()]
+    assert set(written) == set(texts[40:])
