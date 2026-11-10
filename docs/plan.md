@@ -268,3 +268,22 @@ questions in documents):
 - Gradio demo: domain detection, thinking switch, budget slider, JSON mode.
 - Optional: FP8; distillation to Qwen3.5-0.8B on a Mac with MLX; MTP
   speculative decoding.
+
+## Closing (2026-11-10)
+
+The user closed the project at 17:4x EST 11-10 ("ok收尾吧") on my proposal: P8's main
+comparison (MOPD, mixed RL, the merges, against S-mix and the experts) is finished from the jobs
+already queued, and the rest is not run. Not done, and why:
+
+- P2: the scaling-law fit, the d12 data-mix ablation, d20 and its mid-training / SFT, and the bpb
+  comparison with Qwen3.5-0.8B-Base. Done on the side track: the bilingual tokenizer and its
+  compression table, the data shards, a d12 smoke, and P2.5 on d8. d20 alone is 2-3 eight-hour jobs.
+- P2.5: carrying the best change to d20 (no d20; the LLM researcher kept none of its 19 changes).
+- P7.5: round 3 past its propose step (its pass, gate and pool were cancelled on 11-09 to free
+  slots for P8; submit lines kept in `jobs/rsi3_cancelled_submitlines.txt`), and the self-judging
+  arm. Rounds 1-2 ran end to end with hand audits and the fixed-pool control; the duplicate share of
+  proposals rose 26 % → 41 % → 48 % over rounds 1-3, the saturation the stage set out to measure.
+- P8: the top-k / full-vocabulary KL and Open-MOPD weighting as full runs (both built and smoked,
+  11642973 and the balance code, not run at budget); (c) off-policy distillation.
+- P9: serving behind the gateway, the router comparison, the Gradio demo and the optional items.
+  Serving is covered by the vllm-sglang-infra project; the results table is the README's.
