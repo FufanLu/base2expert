@@ -18,8 +18,11 @@ stage_env "${ENV_KIND:-train}"
 # STAGE_MODELS="A B": copy these models to /tmp/b2e-models/ first (NFS mmap is slow).
 # A model the command names as /tmp/b2e-models/<name> is staged too: the IF
 # retry 11360164 was submitted without STAGE_MODELS and died on a missing path.
+# Found anywhere in an argument, so a `bash -c "..."` script counts too (F#122).
 for a in "$@"; do
-  case $a in /tmp/b2e-models/*) STAGE_MODELS="${STAGE_MODELS:-} $(echo "${a#/tmp/b2e-models/}" | cut -d/ -f1)" ;; esac
+  for p in $(grep -o '/tmp/b2e-models/[A-Za-z0-9_.-]*' <<<"$a" || true); do
+    STAGE_MODELS="${STAGE_MODELS:-} ${p#/tmp/b2e-models/}"
+  done
 done
 for m in ${STAGE_MODELS:-}; do stage_model "$m" >/dev/null; done
 cd "$CODE"
