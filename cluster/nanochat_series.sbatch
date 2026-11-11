@@ -34,6 +34,9 @@ for run in $RUNS; do
   if [ -f "$out" ]; then log "skip $base d$d: $out exists"; continue; fi
   export NANOCHAT_BASE_DIR=$ROOT/pretrain/$base
   [ -d "$NANOCHAT_BASE_DIR/base_data_climbmix" ] || { log "no shards in $NANOCHAT_BASE_DIR"; exit 1; }
+  # CORE runs after training; a missing bundle makes nanochat download it and
+  # fail on the move out of /tmp, losing the run (F#121)
+  [ -f "$NANOCHAT_BASE_DIR/eval_bundle/core.yaml" ] || { log "no eval_bundle in $NANOCHAT_BASE_DIR"; exit 1; }
   t0=$SECONDS
   python -P -m scripts.base_train --depth="$d" --model-tag="d$d" --run=dummy \
     --core-metric-every=999999 --core-metric-max-per-task=500 --sample-every=-1 --save-every=-1 \
