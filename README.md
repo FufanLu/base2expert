@@ -29,16 +29,18 @@ Two recursive self-improvement loops are added on top:
   keeps a change only after re-runs beat the best by the node's measured noise;
   two lanes (one per GPU) share a candidate pool.
 
-A side track pre-trains a 0.56B bilingual model from scratch with
-[nanochat](https://github.com/karpathy/nanochat). It covers the tokenizer, a
-small scaling-law fit, data-mix ablations, and chained 8-hour jobs.
+A side track pre-trains small bilingual models from scratch with
+[nanochat](https://github.com/karpathy/nanochat) (depth 6 to 14, 0.14B to 0.66B
+parameters). It covers the tokenizer, a scaling-law fit checked on a held-out
+size, and a data-mix ablation.
 
 > **Status (2026-11-12, closed):** the main line ran P0-P8; P9 (serving behind the gateway, the
 > demo) was not run, serving being the vllm-sglang-infra project's subject. **P8's answer: RL on the
 > three-domain mix from S-mix gives one model within about a point of every expert** (finance −0.80,
 > law −0.62, medicine −0.53 points, paired); multi-teacher distillation, at the same GPU-hours,
 > matches it on finance only. The side track trained the bilingual tokenizer, ran AutoResearch on d8,
-> and has a scaling-law series with a d12 data-mix ablation queued (11817898). What was not run, and
+> and fit a scaling law on d6-d12 that predicted d14's bpb within 0.7 %; at d12, up to 20 % domain
+> data lowered the domain bpb without moving the general bpb. What was not run, and
 > why, is in [docs/plan.md](docs/plan.md) § Closing. Only measured numbers appear below, each with its
 > job in [docs/runs.md](docs/runs.md); every failure, including my own mistakes, is in
 > [docs/failures.md](docs/failures.md).
@@ -56,7 +58,7 @@ Qwen3.5-4B-Base
              ├─ baseline: RL on the three-domain mix (10.78 H200-hours)   ← best single model
              └─ baseline: weight merges of R-fin, R-law, R-med (avg picked on val)
 R-fin → self-written problems on real filings, validity-gated (P7.5): rounds 1-2 trained, round 3 proposed
-Side track: nanochat from scratch (bilingual tokenizer, AutoResearch on d8, scaling series queued)
+Side track: nanochat from scratch (bilingual tokenizer, AutoResearch on d8, scaling d6-d14, d12 data mix)
 ```
 
 ## Results
@@ -184,6 +186,33 @@ The fixed-pool control, 60 steps from the same start, stayed within 442-451 (R-f
 pool). Round 2 kept 4,181 proposals, 207 through the gate, and its RL left the val at 445 / 446 / 442
 (steps 0 / 10 / 20, 11726394). Duplicates rose from 26 % to 41 % to 48 % of proposals over rounds 1-3,
 and neither trained round moved the val beyond its noise.
+
+**Pre-training side track, P2** (nanochat from scratch, bilingual 65,536-token tokenizer, data:param
+ratio 12, one H200, one seed; bpb on the M0 held-out documents, 500 per source, which is
+tokenizer-free and so comparable with Qwen; sizes, mixes and the held-out size fixed before any run,
+11817898 and 11835552, 9.24 H200-hours):
+
+| Depth (params) | d6 (0.14B) | d8 (0.23B) | d10 (0.34B) | d12 (0.49B) | d14 (0.66B), held out |
+|---|---|---|---|---|---|
+| Training FLOPs | 1.04e17 | 2.79e17 | 6.79e17 | 1.48e18 | 3.03e18 |
+| Val bpb | 1.1351 | 1.0650 | 1.0051 | 0.9575 | **0.9201** (fit on d6-d12 predicts 0.9137) |
+| CORE | 0.073 | 0.105 | 0.115 | 0.160 | 0.166 |
+
+`log bpb = a + b log C` fits d6-d12 with b = −0.064 (largest residual 0.0009 in log) and misses d14
+by +0.70 %; each of the eight held-out sources also lands above its prediction (+0.51 % to +1.01 %).
+The local slope flattens with size (−0.065, −0.065, −0.062, −0.056), which a power law without a
+constant term cannot follow, so its extrapolation is optimistic.
+
+| d12, domain share of training bytes | 0 % | 5 % | 10 % | 20 % | Qwen3.5-0.8B-Base | Qwen3.5-4B-Base |
+|---|---|---|---|---|---|---|
+| Domain bpb (fin, law, med × en, zh; mean of 6) | 1.0479 | 0.9934 | 0.9777 | **0.9558** | 0.8438 | 0.7150 |
+| General bpb (en, zh; mean of 2) | 1.0476 | 1.0444 | 1.0452 | 1.0442 | 0.9193 | 0.7755 |
+| CORE | 0.153 | 0.160 | 0.148 | 0.144 | — | — |
+
+Up to 20 % domain data the domain bpb keeps falling, most for the first 5 % (Chinese domain text
+−0.123 at 20 %, English −0.062), and the general bpb stays within 0.0034. The 0 / 10 / 20 % builds
+are 9 GB and re-read their last 5-9 % of steps; the 5 % build is 14 GB and does not (F#125). CORE
+moves by at most 0.017 with 500 items a task, one seed, and is not read as a trend.
 
 **Findings worth knowing** (details in docs/failures.md):
 - F#86: the CAIL charges verifier never paid a selective charge (`[走私、贩卖、运输、制造]毒品`);
