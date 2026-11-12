@@ -48,7 +48,8 @@ def fit_power(xs: list[float], ys: list[float]) -> tuple[float, float]:
     n = len(lx)
     mx, my = sum(lx) / n, sum(ly) / n
     sxx = sum((u - mx) ** 2 for u in lx)
-    b = sum((u - mx) * (v - my) for u, v in zip(lx, ly, strict=True)) / sxx
+    # no strict=True: the login node's python3 is 3.9 (F#124); lx and ly come from the same runs
+    b = sum((u - mx) * (v - my) for u, v in zip(lx, ly)) / sxx  # noqa: B905
     return my - b * mx, b
 
 
