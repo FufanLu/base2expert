@@ -33,37 +33,83 @@ A side track pre-trains a 0.56B bilingual model from scratch with
 [nanochat](https://github.com/karpathy/nanochat). It covers the tokenizer, a
 small scaling-law fit, data-mix ablations, and chained 8-hour jobs.
 
-> **Status (2026-11-08):** main line P0, P1, P3, P4 and P6 done; P5 done (four offline methods,
-> and the rubric judge, which agrees with HealthBench physicians as well as they agree with each
-> other: class-balanced F1 0.686 vs 0.689, difference 95 % [−0.021, +0.017]); P7 (law and medicine
-> RL) in progress: law stopped at step 90 by the step-90 rule (R-law), medicine passed it (+0.0172) and trains on to
-> step 150 and peaked at 70-90 (R-med = step 90 by the window rule; with thinking MedQA test 0.779 → 0.859, MedMCQA 0.665 → 0.690, CMExam 0.791 → 0.798, law held), R-fin-low done (step 90, exported); P7.5's grounded pilot has proposed (83 % / 95 % of
-> proposals kept without / with thinking; 7 / 20 and 1 / 20 of the kept flawed by hand audit); its
-> validity gate, at 8,192 tokens, was cut inside its thinking on half the problems and so dropped 20 of
-> the 32 sound audited ones along with all 8 flawed (F#100); at 32,768 it drops all 8 flawed and 11 of the
-> 32 sound (Fisher p 0.00098), leaving 87 + 84 usable problems (valid and mixed); round 1 kept 5,688 of 10,000 proposals (2,638 duplicates) and R-fin's pass rate left 1,128 mixed (19.8 %; 30.5 % never solved, 49.7 % always right); the gate kept 346 (30.7 %), a hand audit of 20 found 1 flawed (within the scorer's tolerance) and 3 ambiguous, and round 1's RL (20 steps on 515 problems) moved the val 444 → 447 of 512 (inside the noise), and the control, 60 steps on the fixed pool from the same start, stayed within 442-451 throughout (R-fin is saturated on that pool); round 2 kept 4,181 proposals (4,088 duplicates), 831 mixed, 207 through the gate (24.9 %), hand audit 12 sound / 6 ambiguous / 2 flawed, its RL queued; P8: the four-teacher MOPD smoke at full scale passed (peak 91 GB, 104-137 s a step), and the main MOPD arm and mixed RL are queued at 12 H200-hours each; the P8 code (teacher sharing, Open-MOPD weights, weight merging)
-> is written; R-fin's thinking-budget curve is measured (below); P9 not started. Side track: tokenizer, data shards and a d12 smoke so far. Only measured numbers appear
-> below, each with its job in [docs/runs.md](docs/runs.md); every failure, including my own
-> mistakes, is in [docs/failures.md](docs/failures.md); the stage plan is in
-> [docs/plan.md](docs/plan.md).
+> **Status (2026-11-12, closed):** the main line ran P0-P8; P9 (serving behind the gateway, the
+> demo) was not run, serving being the vllm-sglang-infra project's subject. **P8's answer: RL on the
+> three-domain mix from S-mix gives one model within about a point of every expert** (finance −0.80,
+> law −0.62, medicine −0.53 points, paired); multi-teacher distillation, at the same GPU-hours,
+> matches it on finance only. The side track trained the bilingual tokenizer, ran AutoResearch on d8,
+> and has a scaling-law series with a d12 data-mix ablation queued (11817898). What was not run, and
+> why, is in [docs/plan.md](docs/plan.md) § Closing. Only measured numbers appear below, each with its
+> job in [docs/runs.md](docs/runs.md); every failure, including my own mistakes, is in
+> [docs/failures.md](docs/failures.md).
 
 ## Model lineage
 
 ```
 Qwen3.5-4B-Base
-  └─ M0  mid-training (finance + law + medicine + general replay + long-CoT anneal)     done
-       ├─ S-fin SFT → R-fin RL (DAPO, P6)  ─┐                                            done
-       │    └─ R-fin-low (low reasoning effort, per-prompt token budgets)               done
-       ├─ S-law SFT → R-law RL (DAPO, P7)  ─┼─ teachers ─┐                              done (step 90)
-       ├─ S-med SFT → R-med RL (DAPO, P7)  ─┘            │                              running
-       └─ S-mix SFT (all three) ────────────────────── MOPD ──► Trident-4B              queued
-             ├─ baseline: RL on the three-domain mix
-             └─ baseline: TIES / DARE merge of R-fin, R-law, R-med
-R-fin → self-written problems on real filings, validity-gated, three rounds (P7.5)    round 1 done, round 2 running
-Side track: nanochat from scratch (tokenizer, d12 smoke); AutoResearch on d8 (two lanes: the random control kept 3 changes, the LLM researcher none of 19)
+  └─ M0  mid-training (finance + law + medicine + general replay + long-CoT anneal)
+       ├─ S-fin SFT → R-fin RL (DAPO, P6) ──┐
+       │    └─ R-fin-low (low reasoning effort, per-prompt token budgets)
+       ├─ S-law SFT → R-law RL (DAPO, P7) ──┼─ four teachers ─┐
+       ├─ S-med SFT → R-med RL (DAPO, P7) ──┘                 │
+       └─ S-mix SFT (all three) ─────────────────────────── MOPD (11.80 H200-hours)
+             ├─ baseline: RL on the three-domain mix (10.78 H200-hours)   ← best single model
+             └─ baseline: weight merges of R-fin, R-law, R-med (avg picked on val)
+R-fin → self-written problems on real filings, validity-gated (P7.5): rounds 1-2 trained, round 3 proposed
+Side track: nanochat from scratch (bilingual tokenizer, AutoResearch on d8, scaling series queued)
 ```
 
-## Results so far
+## Results
+
+**P8, fusion: one model in place of four teachers** (every arm starts from S-mix; each model run
+through the scripts the experts ran; thinking, greedy, 8,192 tokens unless noted; mean answer
+tokens in brackets; the final steps and evals were fixed on 11-09 before any arm's final number):
+
+| Eval | S-mix (start) | merge_avg | MOPD | Mixed RL | Expert (ceiling) |
+|---|---|---|---|---|---|
+| FinQA test | 0.7855 (2,325) | 0.7864 (1,491) | 0.7995 (1,060) | 0.8012 (551) | R-fin 0.8134 (1,129) |
+| TAT-QA test | 0.9066 (2,150) | 0.9256 (1,319) | 0.9350 (886) | 0.9418 (458) | R-fin 0.9432 (988) |
+| FinQA test, low-effort message | 0.7847 (2,305) | 0.7820 (1,408) | 0.8003 (422) | 0.7960 (321) | R-fin-low 0.8126 (344) |
+| TAT-QA test, low-effort message | 0.9134 (2,093) | 0.9188 (1,245) | 0.9323 (340) | 0.9364 (284) | R-fin-low 0.9391 (261) |
+| CAIL2018 test | 0.6236 (2,471) | 0.6386 (1,533) | 0.6956 (1,620) | **0.7116** (1,338) | R-law 0.7178 (1,522) |
+| MedQA test | 0.7636 (3,705) | 0.8201 (1,494) | 0.8013 (2,300) | 0.8350 (1,091) | R-med 0.8594 (2,097) |
+| MedMCQA dev | 0.6644 (2,152) | 0.6829 (945) | 0.6538 (1,318) | 0.6875 (695) | R-med 0.6900 (1,316) |
+| CMExam test | 0.7775 (1,725) | 0.7906 (1,237) | 0.7725 (1,399) | 0.7953 (1,088) | R-med 0.7982 (1,487) |
+| General + IF, no thinking (10 sets, 19,509 items, pooled) | 0.7268 | 0.7306 | 0.7262 | **0.7339** | — |
+| GSM8K, no thinking | 0.8870 | 0.9052 | 0.8650 | 0.8901 | — |
+| P8 val (128 per teacher, of 512) | 387.2 | 394.2 | 389.8 | **401.0** | — |
+| Training compute (sacct) | — | none (CPU merge) | 11.80 H200-hours | 10.78 H200-hours | — |
+
+Paired differences (points ± se) that decide the reading:
+
+| | Finance, thinking (2,624) | Low-effort (1,886) | Law + medicine, thinking (11,899) | General + IF (19,509) |
+|---|---|---|---|---|
+| MOPD − S-mix | +1.71 ± 0.45 | +1.70 ± 0.55 | +0.47 ± 0.35 (CAIL +7.20 ± 1.26) | −0.07 ± 0.26 (GSM8K −2.20 ± 0.80) |
+| Mixed RL − S-mix | +2.02 ± 0.46 | +1.59 ± 0.55 | **+3.07 ± 0.34** (CAIL +8.80 ± 1.20, MedQA +7.15 ± 1.12) | +0.71 ± 0.25 |
+| MOPD − expert | −1.11 ± 0.36 | −1.01 ± 0.46 | CAIL −2.22 ± 0.92; medicine −3.22 ± 0.36 | — |
+| Mixed RL − expert | −0.80 ± 0.36 | −1.11 ± 0.49 | CAIL −0.62 ± 0.90; medicine −0.53 ± 0.35 | — |
+| MOPD − mixed RL | −0.30 ± 0.35 | +0.11 ± 0.47 | **−2.60 ± 0.34** | −0.78 ± 0.26 |
+
+- **Mixed RL is the one model to keep.** Pooled per domain it is within 1.1 points of each expert (the
+  largest single-set gap is MedQA, −2.44 ± 1.03), it gains on general + IF without thinking (+0.71 ±
+  0.25 over S-mix), and it answers in 1.6-4.7× fewer tokens than S-mix. On the low-effort message it
+  writes 284-321 tokens, R-fin-low's length; in training those rows carried R-fin-low's budget reward.
+- **MOPD ties mixed RL on finance and low effort, not elsewhere.** It took most of law (−2.2 from R-law)
+  and little of medicine (MedQA −5.8 from R-med, 43 of 1,273 answers cut at the cap against R-med's 6),
+  and without thinking it loses GSM8K (−2.20 ± 0.80 against S-mix). It moves furthest from the SFT
+  text: bpb +0.03 to +0.04 on every held-out source and SFT val loss 2.5-4× S-mix's (mixed RL: bpb
+  +0.002); why is not established (neither arm has a KL term to S-mix).
+- **The plan expected MOPD to cost less than RL and to avoid the seesaw; here it did neither.** One MOPD
+  variant (sampled reverse KL, plain weighting) and one seed; the top-k KL and Open-MOPD weighting were
+  smoked, not run at budget. Both arms used about the same GPU-hours, MOPD on two GPUs plus the four
+  trained teachers.
+- **Averaging the experts' weights costs no GPU** and gains on medicine (MedQA +5.66 ± 1.19 over S-mix),
+  not on law (CAIL +1.50 ± 1.32) or low effort (R-fin-low is not in the merge, which writes 1,245-1,408
+  tokens). Of the five merges, DARE at density 0.2 broke the model (378 of 512 val answers repeat until cut at the cap).
+
+Jobs: arms' evals 11819217 (finance), 11819220 (low effort), 11819218 (general, IF, bpb, SFT val loss),
+11819219 (law, medicine), 11819456 (P8 val); S-mix and merge_avg 11771666-11771671, 11804775, 11804776,
+11728733; GPU-hours by sacct over the eight training legs (docs/runs.md, 11-11).
 
 **Finance, P5 / P6** (from S-fin; thinking on, 8,192 tokens; FinQA test 1,147 + TAT-QA dev 738 =
 1,885 items; paired against S-fin, se in brackets):
@@ -125,6 +171,19 @@ After leg 3, 444 of 512 right at step 90 (446 at step 0); 5.3 % of step 61's rol
 0.939 at 261, against R-fin's 0.813 at 1,129 and 0.943 at 988 (paired p 1 and 0.61), and beats R-fin cut at
 128 thinking tokens, as long or longer, 0.790 and 0.919 (p 0.0016 and 0.0026).** The message alone shortens R-fin
 by 5-6 %.
+
+**Rubric judge, P5**: Qwen3.6-35B-A3B grading per-item rubrics agrees with HealthBench physicians as well
+as they agree with each other (class-balanced F1 0.686 against 0.689, difference 95 % [−0.021, +0.017]);
+it replaces a Bradley-Terry reward model.
+
+**Self-written problems, P7.5** (R-fin writes questions on real filings with a program for the answer;
+an external validity gate; RL on the problems it sometimes solves): round 1 kept 5,688 of 10,000
+proposals (2,638 duplicates); R-fin's pass rate left 1,128 mixed, the gate kept 346 (a hand audit of
+20 found 1 flawed and 3 ambiguous), and 20 RL steps moved the val 444 → 447 of 512, inside the noise.
+The fixed-pool control, 60 steps from the same start, stayed within 442-451 (R-fin is saturated on its
+pool). Round 2 kept 4,181 proposals, 207 through the gate, and its RL left the val at 445 / 446 / 442
+(steps 0 / 10 / 20, 11726394). Duplicates rose from 26 % to 41 % to 48 % of proposals over rounds 1-3,
+and neither trained round moved the val beyond its noise.
 
 **Findings worth knowing** (details in docs/failures.md):
 - F#86: the CAIL charges verifier never paid a selective charge (`[走私、贩卖、运输、制造]毒品`);

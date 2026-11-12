@@ -275,8 +275,9 @@ The user closed the project at 17:4x EST 11-10 ("ok收尾吧") on my proposal: P
 comparison (MOPD, mixed RL, the merges, against S-mix and the experts) is finished from the jobs
 already queued, and the rest is not run. Not done, and why:
 
-- P2: the scaling-law fit, the d12 data-mix ablation, d20 and its mid-training / SFT, and the bpb
-  comparison with Qwen3.5-0.8B-Base. Done on the side track: the bilingual tokenizer and its
+- P2: d20 and its mid-training / SFT. (The scaling-law series, the d12 data-mix ablation and the bpb
+  comparison with Qwen3.5-0.8B-Base were added back by the user on 11-10, "那你再跑一跑 加进去呗":
+  job 11817898, results in the README when it ends.) Done on the side track: the bilingual tokenizer and its
   compression table, the data shards, a d12 smoke, and P2.5 on d8. d20 alone is 2-3 eight-hour jobs.
 - P2.5: carrying the best change to d20 (no d20; the LLM researcher kept none of its 19 changes).
 - P7.5: round 3 past its propose step (its pass, gate and pool were cancelled on 11-09 to free
