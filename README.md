@@ -102,9 +102,17 @@ Paired differences (points ± se) that decide the reading:
   text: bpb +0.03 to +0.04 on every held-out source and SFT val loss 2.5-4× S-mix's (mixed RL: bpb
   +0.002); why is not established (neither arm has a KL term to S-mix).
 - **The plan expected MOPD to cost less than RL and to avoid the seesaw; here it did neither.** One MOPD
-  variant (sampled reverse KL, plain weighting) and one seed; the top-k KL and Open-MOPD weighting were
+  variant (the sampled token's k3 as the reward, plain weighting) and one seed; the top-k KL and Open-MOPD weighting were
   smoked, not run at budget. Both arms used about the same GPU-hours, MOPD on two GPUs plus the four
   trained teachers.
+- **MOPD's per-token signal was k3 used as a reward, which is not the reverse-KL gradient** (F#130,
+  found 11-13 while tracing one question through every stage). With r = p_teacher / p_student,
+  −k3 = log r + 1 − r: the extra −r punishes the tokens the teacher rates above the student, and the
+  expected update is ∇KL(teacher‖student) − ∇KL(student‖teacher) instead of −∇KL(student‖teacher)
+  (equal to 4e-16 on 2,000 random distributions; against the reverse-KL direction in 1,111 of them).
+  verl's docs recommend `loss_mode=k1` with `use_policy_gradient`; its defaults, k3 with the policy
+  gradient, are what P8 ran. The numbers above are measured and stand as "MOPD with k3 as the
+  reward"; a k1 arm (`MOPD_LOSS=k1`) was not run, so whether it closes the gap to mixed RL is open.
 - **Averaging the experts' weights costs no GPU** and gains on medicine (MedQA +5.66 ± 1.19 over S-mix),
   not on law (CAIL +1.50 ± 1.32) or low effort (R-fin-low is not in the merge, which writes 1,245-1,408
   tokens). Of the five merges, DARE at density 0.2 broke the model (378 of 512 val answers repeat until cut at the cap).

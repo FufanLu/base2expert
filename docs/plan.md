@@ -287,5 +287,8 @@ already queued, and the rest is not run. Not done, and why:
   proposals rose 26 % → 41 % → 48 % over rounds 1-3, the saturation the stage set out to measure.
 - P8: the top-k / full-vocabulary KL and Open-MOPD weighting as full runs (both built and smoked,
   11642973 and the balance code, not run at budget); (c) off-policy distillation.
+  Found after closing (11-13, F#130): the MOPD arm used k3 as the per-token reward (verl's default),
+  whose expected gradient is not the reverse-KL one; verl recommends k1 for that mode. A k1 arm
+  (`MOPD_LOSS=k1`, same student, teachers, prompts and GPU time) is the run that would test it.
 - P9: serving behind the gateway, the router comparison, the Gradio demo and the optional items.
   Serving is covered by the vllm-sglang-infra project; the results table is the README's.
